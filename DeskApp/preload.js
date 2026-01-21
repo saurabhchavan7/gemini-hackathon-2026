@@ -1,12 +1,25 @@
 const { contextBridge, ipcRenderer } = require('electron');
 
-// Expose Electron APIs to React
-contextBridge.exposeInMainWorld('electron', {
+// Expose Electron APIs to renderer process
+contextBridge.exposeInMainWorld('electronAPI', {
   // Capture screenshot
-  captureScreen: () => ipcRenderer.invoke('capture-screen'),
+  captureScreenshot: () => ipcRenderer.invoke('capture-screenshot'),
   
-  // Listen for global shortcut captures
-  onScreenshotCaptured: (callback) => {
-    ipcRenderer.on('screenshot-captured', (event, data) => callback(data));
+  // Listen for keyboard shortcut
+  onCaptureShortcut: (callback) => ipcRenderer.on('capture-shortcut', callback),
+  
+  // Toggle button visibility (for future settings)
+  toggleButtonVisibility: (visible) => ipcRenderer.send('toggle-button-visibility', visible),
+  
+  // Platform info
+  platform: process.platform,
+  
+  // Version info
+  versions: {
+    node: process.versions.node,
+    chrome: process.versions.chrome,
+    electron: process.versions.electron
   }
 });
+
+console.log('✅ Preload script loaded');
