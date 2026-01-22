@@ -1,6 +1,6 @@
 """
-LifeOS Backend - Phase 1D
-Simple API to receive and store captures from Electron app
+LifeOS Backend - Phase 2A
+API with SQLite storage + Gemini Vision Analysis
 """
 
 from fastapi import FastAPI, File, UploadFile, Form
@@ -8,7 +8,11 @@ from fastapi.middleware.cors import CORSMiddleware
 from datetime import datetime
 import os
 import uuid
+import sqlite3
 import json
+
+from models.database import init_database, get_connection
+from agents.capture_agent import process_capture  # Import the new agent
 
 app = FastAPI()
 
@@ -20,23 +24,12 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Storage paths
+# Storage path for screenshots
 CAPTURES_DIR = "./captures"
-METADATA_FILE = "./captures/metadata.json"
-
-# Ensure captures directory exists
 os.makedirs(CAPTURES_DIR, exist_ok=True)
 
-# Load or create metadata store
-def load_metadata():
-    if os.path.exists(METADATA_FILE):
-        with open(METADATA_FILE, "r") as f:
-            return json.load(f)
-    return {"items": []}
-
-def save_metadata(data):
-    with open(METADATA_FILE, "w") as f:
-        json.dump(data, f, indent=2)
+# Initialize database on startup
+init_database()
 
 
 @app.get("/")
@@ -53,64 +46,78 @@ async def capture_screenshot(
     timestamp: str = Form("")
 ):
     """
-    Receive a capture from the Electron app
-    
-    Expects multipart form data with:
-    - screenshot: PNG file
-    - app_name: string
-    - window_title: string  
-    - url: string (optional)
-    - timestamp: string
+    Receive a capture from Electron app:
+    1. Save screenshot file
+    2. Analyze with Gemini Vision
+    3. Store to database
     """
     try:
         # Generate unique ID
         item_id = str(uuid.uuid4())[:8]
         
-        # Save screenshot
-        filename = f"{item_id}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.png"
+        # Save screenshot file
+        filename = f"{item_id}.png"
         filepath = os.path.join(CAPTURES_DIR, filename)
         
-        # Read and save the uploaded file
         contents = await screenshot.read()
         with open(filepath, "wb") as f:
             f.write(contents)
         
-        # Create metadata entry
-        item = {
-            "id": item_id,
-            "screenshot_path": filepath,
-            "app_name": app_name,
-            "window_title": window_title,
-            "url": url if url else None,
-            "timestamp": timestamp or datetime.now().isoformat(),
-            "created_at": datetime.now().isoformat(),
-            # Placeholders for AI processing (Phase 2)
-            "content_type": None,
-            "extracted_text": None,
-            "entities": [],
-            "intent": None,
-            "tags": [],
-            "urgency": None,
-        }
+        print(f"📸 Screenshot saved: {item_id}")
         
-        # Save to metadata
-        metadata = load_metadata()
-        metadata["items"].append(item)
-        save_metadata(metadata)
+        # PHASE 2A: Analyze with Gemini
+        print(f"🔍 Analyzing with Gemini...")
+        analysis = process_capture(item_id, filepath)
         
-        print(f"✅ Capture saved: {item_id}")
-        print(f"   App: {app_name}")
-        print(f"   Title: {window_title[:50]}{'...' if len(window_title) > 50 else ''}")
-        print(f"   URL: {url or 'N/A'}")
+        # Save to database
+        conn = get_connection()
+        cursor = conn.cursor()
+        
+        now = datetime.now().isoformat()
+        
+        cursor.execute("""
+            INSERT INTO items (
+                id, screenshot_path, app_name, window_title, url, timestamp,
+                extracted_text, content_type, title, entities, deadline, deadline_text,
+                created_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, (
+            item_id,
+            filepath,
+            app_name,
+            window_title,
+            url if url else None,
+            timestamp or now,
+            analysis.get("extracted_text", ""),
+            analysis.get("content_type", "unknown"),
+            analysis.get("title", ""),
+            analysis.get("entities", ""),
+            analysis.get("deadline"),
+            analysis.get("deadline_text", ""),
+            now,
+            now
+        ))
+        
+        conn.commit()
+        conn.close()
+        
+        print(f"✅ Capture complete: {item_id}")
+        print(f"   Content Type: {analysis.get('content_type')}")
+        print(f"   Title: {analysis.get('title')[:50]}")
         
         return {
             "success": True,
             "item_id": item_id,
-            "message": "Capture saved successfully"
+            "content_type": analysis.get("content_type"),
+            "title": analysis.get("title"),
+            "deadline": analysis.get("deadline"),
+            "message": "Capture analyzed and saved"
         }
         
     except Exception as e:
         print(f"❌ Capture error: {e}")
+        import traceback
+        traceback.print_exc()
         return {
             "success": False,
             "error": str(e)
@@ -120,27 +127,41 @@ async def capture_screenshot(
 @app.get("/api/items")
 def get_items(limit: int = 50):
     """Get recent captures"""
-    metadata = load_metadata()
-    items = metadata.get("items", [])
-    return {
-        "items": items[-limit:][::-1],  # Most recent first
-        "total": len(items)
-    }
+    conn = get_connection()
+    conn.row_factory = sqlite3.Row
+    cursor = conn.cursor()
+    
+    cursor.execute("""
+        SELECT * FROM items 
+        WHERE is_archived = 0
+        ORDER BY created_at DESC
+        LIMIT ?
+    """, (limit,))
+    
+    items = [dict(row) for row in cursor.fetchall()]
+    conn.close()
+    
+    return {"items": items, "total": len(items)}
 
 
 @app.get("/api/items/{item_id}")
 def get_item(item_id: str):
     """Get a specific capture"""
-    metadata = load_metadata()
-    for item in metadata["items"]:
-        if item["id"] == item_id:
-            return item
+    conn = get_connection()
+    conn.row_factory = sqlite3.Row
+    cursor = conn.cursor()
+    
+    cursor.execute("SELECT * FROM items WHERE id = ?", (item_id,))
+    row = cursor.fetchone()
+    conn.close()
+    
+    if row:
+        return dict(row)
     return {"error": "Item not found"}
 
 
 if __name__ == "__main__":
     import uvicorn
-    print("🚀 Starting LifeOS Backend...")
-    print("📡 API running at http://localhost:8000")
-    print("📖 Docs at http://localhost:8000/docs")
+    print("🚀 Starting LifeOS Backend with Gemini Analysis...")
+    print("💡 API running at http://localhost:8000")
     uvicorn.run(app, host="0.0.0.0", port=8000)
