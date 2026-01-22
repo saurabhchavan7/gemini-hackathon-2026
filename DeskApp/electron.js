@@ -1,3 +1,21 @@
+/**
+ * OAuth IPC Handlers for electron.js
+ * 
+ * Purpose: Add these handlers to your existing electron.js file
+ * 
+ * Instructions:
+ * 1. Add these imports at the top of electron.js (after existing imports)
+ * 2. Add these IPC handlers before app.whenReady()
+ * 
+ * These handlers allow the renderer process (React) to:
+ * - Trigger Google OAuth login
+ * - Get current user info
+ * - Logout
+ */
+
+const GoogleAuth = require('./src/auth/GoogleAuth');
+const TokenManager = require('./src/auth/TokenManager');
+const CloudRunClient = require('./src/api/CloudRunClient');
 const { app, BrowserWindow, ipcMain, globalShortcut, desktopCapturer, screen, Notification } = require('electron');
 const path = require('path');
 const fs = require('fs');
@@ -357,6 +375,118 @@ ipcMain.on('toggle-button-visibility', (event, visible) => {
     store.set('buttonVisible', visible);
   }
 });
+
+/**
+ * Handle Google OAuth login flow
+ * Called from Login.jsx when user clicks "Sign in with Google"
+ */
+ipcMain.handle('google-login', async (event) => {
+  try {
+    console.log('🔐 Starting Google OAuth flow...');
+    
+    // Step 1: Open browser and get authorization code
+    const authCode = await GoogleAuth.startOAuthFlow();
+    console.log('✅ Got authorization code');
+    
+    // Step 2: Send code to backend, get JWT token
+    const { token, user } = await CloudRunClient.login(authCode);
+    console.log('✅ Login successful:', user.email);
+    
+    return {
+      success: true,
+      user: user
+    };
+    
+  } catch (error) {
+    console.error('❌ Login failed:', error);
+    return {
+      success: false,
+      error: error.message
+    };
+  }
+});
+
+/**
+ * Get current user information
+ * Called from Dashboard.jsx on mount
+ */
+ipcMain.handle('get-current-user', async (event) => {
+  try {
+    console.log('👤 Getting current user...');
+    
+    // Check if authenticated first
+    const isAuth = await TokenManager.isAuthenticated();
+    
+    if (!isAuth) {
+      throw new Error('Not authenticated');
+    }
+    
+    // Fetch user from backend
+    const user = await CloudRunClient.getCurrentUser();
+    
+    return {
+      success: true,
+      user: user
+    };
+    
+  } catch (error) {
+    console.error('❌ Failed to get user:', error);
+    return {
+      success: false,
+      error: error.message
+    };
+  }
+});
+
+/**
+ * Handle logout
+ * Called from Dashboard.jsx logout button
+ */
+ipcMain.handle('logout', async (event) => {
+  try {
+    console.log('🚪 Logging out...');
+    
+    // Clear all authentication data
+    await TokenManager.clearToken();
+    
+    console.log('✅ Logout successful');
+    
+    return {
+      success: true
+    };
+    
+  } catch (error) {
+    console.error('❌ Logout failed:', error);
+    return {
+      success: false,
+      error: error.message
+    };
+  }
+});
+
+/**
+ * Check authentication status
+ * Useful for route guards and auto-login
+ */
+ipcMain.handle('check-auth', async (event) => {
+  try {
+    const isAuth = await TokenManager.isAuthenticated();
+    const user = isAuth ? await TokenManager.getUser() : null;
+    
+    return {
+      isAuthenticated: isAuth,
+      user: user
+    };
+    
+  } catch (error) {
+    console.error('❌ Auth check failed:', error);
+    return {
+      isAuthenticated: false,
+      user: null
+    };
+  }
+});
+
 
 // App lifecycle - INITIALIZE STORE FIRST
 app.whenReady().then(async () => {
