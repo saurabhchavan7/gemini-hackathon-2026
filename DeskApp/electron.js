@@ -49,7 +49,7 @@ if (!fs.existsSync(capturesDir)) {
 }
 
 // Create main dashboard window
-function createMainWindow() {
+async function createMainWindow() {
   mainWindow = new BrowserWindow({
     width: 1200,
     height: 800,
@@ -61,7 +61,13 @@ function createMainWindow() {
   });
 
   // Load your Next.js app
-  const startUrl = process.env.ELECTRON_START_URL || 'http://localhost:3000';
+  //const startUrl = process.env.ELECTRON_START_URL || 'http://localhost:3000';
+const isAuthenticated = await TokenManager.isAuthenticated();
+
+  const startUrl = isAuthenticated
+    ? 'http://localhost:3000/inbox'
+    : 'http://localhost:3000/login';
+
   mainWindow.loadURL(startUrl);
 
   // Open DevTools in development
@@ -78,11 +84,11 @@ function createMainWindow() {
 function createFloatingButton() {
   // Get saved position or use default
   const savedPosition = store.get('buttonPosition');
-  
+
   // Get primary display dimensions
   const primaryDisplay = screen.getPrimaryDisplay();
   const { width, height } = primaryDisplay.workAreaSize;
-  
+
   // Ensure position is within screen bounds
   const x = Math.min(savedPosition.x, width - 90);
   const y = Math.min(savedPosition.y, height - 90);
@@ -135,10 +141,10 @@ function createFloatingButton() {
 // Register global keyboard shortcut
 function registerShortcuts() {
   const shortcut = store.get('captureShortcut');
-  
+
   const registered = globalShortcut.register(shortcut, () => {
     console.log('Keyboard shortcut triggered:', shortcut);
-    
+
     // Notify floating button to trigger capture
     if (floatingButton && !floatingButton.isDestroyed()) {
       floatingButton.webContents.send('capture-shortcut');
@@ -174,7 +180,7 @@ async function getActiveWindowContext() {
 
     // Use external PowerShell script file (avoids escaping issues)
     const scriptPath = path.join(__dirname, 'get-window-context.ps1');
-    
+
     const { stdout } = await execAsync(
       `powershell -ExecutionPolicy Bypass -File "${scriptPath}"`,
       { timeout: 5000 }
@@ -186,10 +192,10 @@ async function getActiveWindowContext() {
 
     // Try to get URL for browsers
     const browsers = ['chrome', 'msedge', 'brave', 'firefox', 'opera'];
-    const isBrowser = browsers.some(b => 
+    const isBrowser = browsers.some(b =>
       context.appName?.toLowerCase().includes(b)
     );
-    
+
     if (isBrowser) {
       // For now, try to extract URL from window title (many browsers show it)
       // Full URL capture via clipboard can be added later
@@ -286,7 +292,7 @@ async function sendToBackend(screenshotPath, context) {
 // Handle screenshot capture
 ipcMain.handle('capture-screenshot', async (event) => {
   console.log('📸 Capture screenshot requested');
-  
+
   try {
     // FIRST: Get active window context BEFORE taking screenshot
     // This is important because the screenshot action might change focus
@@ -297,26 +303,26 @@ ipcMain.handle('capture-screenshot', async (event) => {
     await new Promise(resolve => setTimeout(resolve, 100));
 
     // Get all display sources (screens)
-    const sources = await desktopCapturer.getSources({ 
+    const sources = await desktopCapturer.getSources({
       types: ['screen'],
       thumbnailSize: { width: 1920, height: 1080 }
     });
-    
+
     if (sources.length === 0) {
       throw new Error('No screen sources available');
     }
 
     // Get primary screen
     const primarySource = sources[0];
-    
+
     // Get screenshot as NativeImage
     const screenshot = primarySource.thumbnail;
-    
+
     // Generate filename with timestamp
     const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
     const filename = `capture_${timestamp}.png`;
     const screenshotPath = path.join(capturesDir, filename);
-    
+
     // Save screenshot to file
     fs.writeFileSync(screenshotPath, screenshot.toPNG());
     console.log('✅ Screenshot saved:', screenshotPath);
@@ -333,9 +339,9 @@ ipcMain.handle('capture-screenshot', async (event) => {
 
     // Show success notification
     showNotification('Screenshot Captured! 📸', context.windowTitle || 'Processing...');
-    
-    return { 
-      success: true, 
+
+    return {
+      success: true,
       itemId: backendResult?.item_id || 'local_' + Date.now(),
       screenshotPath: screenshotPath,
       context: context,
@@ -345,10 +351,10 @@ ipcMain.handle('capture-screenshot', async (event) => {
   } catch (error) {
     console.error('❌ Capture failed:', error);
     showNotification('Capture Failed', error.message);
-    
-    return { 
-      success: false, 
-      error: error.message 
+
+    return {
+      success: false,
+      error: error.message
     };
   }
 });
@@ -383,20 +389,20 @@ ipcMain.on('toggle-button-visibility', (event, visible) => {
 ipcMain.handle('google-login', async (event) => {
   try {
     console.log('🔐 Starting Google OAuth flow...');
-    
+
     // Step 1: Open browser and get authorization code
     const authCode = await GoogleAuth.startOAuthFlow();
     console.log('✅ Got authorization code');
-    
+
     // Step 2: Send code to backend, get JWT token
     const { token, user } = await CloudRunClient.login(authCode);
     console.log('✅ Login successful:', user.email);
-    
+
     return {
       success: true,
       user: user
     };
-    
+
   } catch (error) {
     console.error('❌ Login failed:', error);
     return {
@@ -413,22 +419,22 @@ ipcMain.handle('google-login', async (event) => {
 ipcMain.handle('get-current-user', async (event) => {
   try {
     console.log('👤 Getting current user...');
-    
+
     // Check if authenticated first
     const isAuth = await TokenManager.isAuthenticated();
-    
+
     if (!isAuth) {
       throw new Error('Not authenticated');
     }
-    
+
     // Fetch user from backend
     const user = await CloudRunClient.getCurrentUser();
-    
+
     return {
       success: true,
       user: user
     };
-    
+
   } catch (error) {
     console.error('❌ Failed to get user:', error);
     return {
@@ -445,16 +451,16 @@ ipcMain.handle('get-current-user', async (event) => {
 ipcMain.handle('logout', async (event) => {
   try {
     console.log('🚪 Logging out...');
-    
+
     // Clear all authentication data
     await TokenManager.clearToken();
-    
+
     console.log('✅ Logout successful');
-    
+
     return {
       success: true
     };
-    
+
   } catch (error) {
     console.error('❌ Logout failed:', error);
     return {
@@ -472,12 +478,12 @@ ipcMain.handle('check-auth', async (event) => {
   try {
     const isAuth = await TokenManager.isAuthenticated();
     const user = isAuth ? await TokenManager.getUser() : null;
-    
+
     return {
       isAuthenticated: isAuth,
       user: user
     };
-    
+
   } catch (error) {
     console.error('❌ Auth check failed:', error);
     return {
@@ -491,20 +497,20 @@ ipcMain.handle('check-auth', async (event) => {
 // App lifecycle - INITIALIZE STORE FIRST
 app.whenReady().then(async () => {
   console.log('🚀 LifeOS starting...');
-  
+
   // IMPORTANT: Initialize electron-store first
   await initializeStore();
   console.log('✅ Store initialized');
-  
+
   // Create main window
   createMainWindow();
-  
+
   // Create floating button
   createFloatingButton();
-  
+
   // Register keyboard shortcuts
   registerShortcuts();
-  
+
   console.log('✅ LifeOS ready!');
 });
 

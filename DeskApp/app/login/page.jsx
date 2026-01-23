@@ -1,5 +1,5 @@
 /**
- * Login.jsx
+ * app/login/page.jsx
  * 
  * Purpose: Login page with Google OAuth integration
  * 
@@ -16,36 +16,41 @@
  * - error: Login failed (shows error message)
  */
 
+'use client';
+
 import React, { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 
 export default function Login() {
+  const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
-  /**
-   * Check if already authenticated on mount
-   * If yes, redirect to dashboard
-   */
-  useEffect(() => {
-    checkExistingAuth();
-  }, []);
+ /**
+ * Check if already authenticated on mount
+ * If yes, redirect to inbox
+ */
+useEffect(() => {
+  checkExistingAuth();
+}, []);
 
-  /**
-   * Check for existing authentication
-   */
-  const checkExistingAuth = async () => {
-    try {
-      const authStatus = await window.electronAPI.checkAuth();
-      
-      if (authStatus.isAuthenticated) {
-        console.log('✅ Already authenticated, redirecting...');
-        // User is already logged in, go to dashboard
-        window.location.href = '/dashboard';
-      }
-    } catch (err) {
-      console.log('ℹ️ Not authenticated, showing login');
+/**
+ * Check for existing authentication
+ */
+const checkExistingAuth = async () => {
+  try {
+    if (!window.electronAPI) return;
+    
+    const authStatus = await window.electronAPI.checkAuth();
+    
+    if (authStatus.isAuthenticated) {
+      console.log('✅ Already authenticated, redirecting...');
+      router.push('/inbox');  // Changed from '/' to '/inbox'
     }
-  };
+  } catch (err) {
+    console.log('ℹ️ Not authenticated, showing login');
+  }
+};
 
   /**
    * Handle Google Sign-In button click
@@ -65,8 +70,9 @@ export default function Login() {
         console.log('✅ Login successful!');
         console.log('👤 User:', result.user.email);
         
-        // Redirect to dashboard
-        window.location.href = '/dashboard';
+        // Redirect to dashboard using Next.js router
+        router.push('/inbox');
+
         
       } else {
         // Login failed
@@ -160,7 +166,7 @@ export default function Login() {
         {process.env.NODE_ENV === 'development' && (
           <div className="mt-6 p-3 bg-gray-100 rounded text-xs text-gray-600">
             <p>🔧 Development Mode</p>
-            <p className="mt-1">Backend: {process.env.BACKEND_URL || 'http://localhost:8000'}</p>
+            <p className="mt-1">Backend: http://localhost:8000</p>
           </div>
         )}
       </div>

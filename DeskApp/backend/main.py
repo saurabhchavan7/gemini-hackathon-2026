@@ -2,7 +2,18 @@
 LifeOS Backend - Phase 2A
 API with SQLite storage + Gemini Vision Analysis
 """
+import sys
+import os
 
+# Add parent directory to path to import from src
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
+
+from fastapi import HTTPException, Header
+from pydantic import BaseModel
+from typing import Optional
+
+from auth import google_oauth, jwt_manager
+from models import user
 from fastapi import FastAPI, File, UploadFile, Form
 from fastapi.middleware.cors import CORSMiddleware
 from datetime import datetime
@@ -30,6 +41,158 @@ os.makedirs(CAPTURES_DIR, exist_ok=True)
 
 # Initialize database on startup
 init_database()
+
+class LoginRequest(BaseModel):
+    """Request body for login endpoint"""
+    code: str  # Authorization code from OAuth callback
+
+
+class LoginResponse(BaseModel):
+    """Response from login endpoint"""
+    token: str  # JWT token
+    user: dict  # User information
+
+
+@app.post("/auth/google/login")
+async def google_login(request: LoginRequest):
+    """
+    Handle Google OAuth login
+    
+    Flow:
+    1. Receive authorization code from frontend
+    2. Exchange code for tokens with Google
+    3. Verify ID token and extract user info
+    4. Create/update user in database
+    5. Generate JWT token
+    6. Return JWT + user info to frontend
+    
+    Frontend will store JWT and use it for authenticated requests
+    """
+    
+    try:
+        print(f"\n🔐 Login request received")
+        
+        # Step 1: Exchange authorization code for tokens with Google
+        user_info = google_oauth.authenticate_user(request.code)
+        
+        # Step 2: Create or update user in database
+        user_data = user.create_or_update_user(
+            user_id=user_info["user_id"],
+            email=user_info["email"],
+            name=user_info["name"],
+            picture=user_info["picture"]
+        )
+        
+        # Step 3: Generate JWT token for this user
+        jwt_token = jwt_manager.create_jwt_token(
+            user_id=user_data["user_id"],
+            email=user_data["email"]
+        )
+        
+        # Step 4: Return JWT + user info
+        response = {
+            "token": jwt_token,
+            "user": {
+                "user_id": user_data["user_id"],
+                "email": user_data["email"],
+                "name": user_data["name"],
+                "picture": user_data["picture"]
+            }
+        }
+        
+        print(f"✅ Login successful: {user_data['email']}\n")
+        
+        return response
+        
+    except Exception as e:
+        print(f"❌ Login failed: {e}\n")
+        raise HTTPException(
+            status_code=400,
+            detail=f"Login failed: {str(e)}"
+        )
+
+
+@app.get("/api/user/me")
+async def get_current_user(authorization: Optional[str] = Header(None)):
+    """
+    Get current authenticated user information
+    
+    Protected endpoint - requires valid JWT token in Authorization header
+    
+    Header format: Authorization: Bearer <jwt_token>
+    
+    Returns user profile data from database
+    """
+    
+    try:
+        print(f"\n👤 User info request received")
+        
+        # Step 1: Extract JWT token from Authorization header
+        if not authorization:
+            raise HTTPException(
+                status_code=401,
+                detail="Authorization header missing"
+            )
+        
+        # Authorization header format: "Bearer <token>"
+        if not authorization.startswith("Bearer "):
+            raise HTTPException(
+                status_code=401,
+                detail="Invalid authorization header format"
+            )
+        
+        token = authorization.replace("Bearer ", "")
+        
+        # Step 2: Verify JWT token and extract user_id
+        try:
+            payload = jwt_manager.verify_jwt_token(token)
+            user_id = payload["user_id"]
+        except Exception as e:
+            raise HTTPException(
+                status_code=401,
+                detail=f"Invalid or expired token: {str(e)}"
+            )
+        
+        # Step 3: Get user from database
+        user_data = user.get_user(user_id)
+        
+        if not user_data:
+            raise HTTPException(
+                status_code=404,
+                detail="User not found"
+            )
+        
+        # Step 4: Return user info
+        print(f"✅ User info retrieved: {user_data['email']}\n")
+        
+        return {
+            "user_id": user_data["user_id"],
+            "email": user_data["email"],
+            "name": user_data["name"],
+            "picture": user_data["picture"]
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"❌ Failed to get user: {e}\n")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to retrieve user information: {str(e)}"
+        )
+
+
+@app.get("/health")
+def health_check():
+    """
+    Health check endpoint
+    Returns API status
+    """
+    return {
+        "status": "healthy",
+        "service": "LifeOS Backend",
+        "version": "1.0.0"
+    }
 
 
 @app.get("/")

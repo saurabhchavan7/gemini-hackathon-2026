@@ -16,69 +16,50 @@
  * 3. Main content area ready for captures/tasks
  * 4. Logout clears token and redirects to login
  */
+'use client';
 
 import React, { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 
 export default function Dashboard() {
-  // State management
+  const router = useRouter(); // ← Move here at component level
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  /**
-   * Fetch user information on component mount
-   */
-  useEffect(() => {
-    fetchUserInfo();
-  }, []);
-
-  /**
-   * Get current user data from backend
-   */
   const fetchUserInfo = async () => {
     try {
       setLoading(true);
       setError(null);
-
-      // Call backend via IPC (will implement in electron.js)
       const userData = await window.electronAPI.getCurrentUser();
-      
       setUser(userData);
       console.log('✅ User data loaded:', userData.email);
-      
     } catch (err) {
       console.error('❌ Failed to load user:', err);
       setError(err.message);
-      
-      // If authentication fails, redirect to login
-      // (Will implement navigation later)
       setTimeout(() => {
-        window.location.href = '/login';
+        router.push('/login'); // ← Now router is available
       }, 2000);
-      
     } finally {
       setLoading(false);
     }
   };
 
-  /**
-   * Handle logout - clear token and redirect
-   */
   const handleLogout = async () => {
     try {
       console.log('🚪 Logging out...');
-      
-      // Clear authentication via IPC
       await window.electronAPI.logout();
-      
-      // Redirect to login
-      window.location.href = '/login';
-      
+      router.push('/login'); // ← Now router is available
     } catch (err) {
       console.error('❌ Logout failed:', err);
       alert('Failed to logout. Please try again.');
     }
   };
+
+  useEffect(() => {
+    fetchUserInfo();
+  }, []);
+
 
   /**
    * Render loading state
