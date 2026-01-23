@@ -1,0 +1,9 @@
+{
+  "project_id": "gemini-hackathon-2026-484903",
+  "region": "us-central1",
+  "bucket": "gemini-hackathon-2026-484903-lifeos-vectors",
+  "index_id": "7431407777114750976",
+  "index_resource_name": "projects/1056690364460/locations/us-central1/indexes/7431407777114750976",
+  "endpoint_id": "8185021842885443584",
+  "endpoint_resource_name": "projects/1056690364460/locations/us-central1/indexEndpoints/8185021842885443584"
+}

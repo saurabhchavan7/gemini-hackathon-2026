@@ -5,6 +5,11 @@ __pycache__/
 
 # C extensions
 *.so
+node_modules/
+
+# Next.js build output
+.next/
+
 
 # Distribution / packaging
 .Python
@@ -14,8 +19,7 @@ dist/
 downloads/
 eggs/
 .eggs/
-lib/
-lib64/
+
 parts/
 sdist/
 var/
@@ -25,6 +29,10 @@ share/python-wheels/
 .installed.cfg
 *.egg
 MANIFEST
+folder-structure.txt
+captures/
+setup/
+Docs/
 
 # PyInstaller
 #  Usually these files are written by a python script from a template
@@ -143,6 +151,7 @@ venv/
 ENV/
 env.bak/
 venv.bak/
+secrets/
 
 # Spyder project settings
 .spyderproject
