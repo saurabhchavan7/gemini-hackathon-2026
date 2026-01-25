@@ -7,7 +7,6 @@ import { Sidebar } from "./sidebar";
 import { CommandBar } from "./command-bar";
 import { DetailDrawer } from "./detail-drawer";
 import { CommandPalette } from "./command-palette";
-import { FloatingCaptureButton } from "./floating-capture-button";
 import type { CaptureItem } from "@/types/lifeos";
 
 interface AppShellProps {
@@ -74,7 +73,7 @@ export function AppShell({ children }: AppShellProps) {
         isOpen={isCommandPaletteOpen}
         onClose={() => setIsCommandPaletteOpen(false)}
       />
-      <FloatingCaptureButton />
+      
     </div>
   );
 }

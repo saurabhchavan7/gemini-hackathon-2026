@@ -22,36 +22,31 @@ def init_database():
     
     # Items table - stores captures + AI analysis
     cursor.execute("""
-        CREATE TABLE IF NOT EXISTS items (
-            id TEXT PRIMARY KEY,
-            screenshot_path TEXT,
-            app_name TEXT,
-            window_title TEXT,
-            url TEXT,
-            timestamp TEXT,
-            
-            -- Gemini Vision Analysis
-            extracted_text TEXT,
-            content_type TEXT,
-            title TEXT,
-            entities TEXT,
-            deadline TEXT,
-            deadline_text TEXT,
-            
-            -- Intent (Phase 2B)
-            intent TEXT,
-            urgency TEXT,
-            tags TEXT,
-            
-            -- Summary (Phase 2C)
-            summary TEXT,
-            
-            -- Metadata
-            created_at TEXT,
-            updated_at TEXT,
-            is_archived INTEGER DEFAULT 0
-        )
-    """)
+    CREATE TABLE IF NOT EXISTS items (
+        id TEXT PRIMARY KEY,
+        user_id TEXT,  -- NEW
+        screenshot_path TEXT,
+        audio_path TEXT,  -- NEW
+        audio_transcript TEXT,  -- NEW
+        text_note TEXT,   -- NEW
+        app_name TEXT,
+        window_title TEXT,
+        url TEXT,
+        timestamp TEXT,
+        
+        -- Gemini Analysis
+        extracted_text TEXT,
+        content_type TEXT,
+        title TEXT,
+        entities TEXT,
+        deadline TEXT,
+        
+        -- Metadata
+        created_at TEXT,
+        updated_at TEXT,
+        is_archived INTEGER DEFAULT 0
+    )
+""")
     
     # Reminders table
     cursor.execute("""

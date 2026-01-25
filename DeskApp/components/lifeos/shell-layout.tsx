@@ -7,7 +7,6 @@ import { Sidebar } from "./sidebar";
 import { CommandBar } from "./command-bar";
 import { DetailDrawer } from "./detail-drawer";
 import { CommandPalette } from "./command-palette";
-import { FloatingCaptureButton } from "./floating-capture-button";
 import { LifeOSProvider, useLifeOS } from "./lifeos-provider";
 
 interface ShellLayoutProps {
@@ -59,7 +58,7 @@ function ShellLayoutInner({ children }: ShellLayoutProps) {
         isOpen={isCommandPaletteOpen}
         onClose={() => setIsCommandPaletteOpen(false)}
       />
-      <FloatingCaptureButton />
+    
     </div>
   );
 }

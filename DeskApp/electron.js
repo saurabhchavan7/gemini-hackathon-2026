@@ -23,6 +23,134 @@ const fs = require('fs');
 // Import electron-store - it's an ES module, so we need to import it differently
 let Store;
 let store;
+let notificationWindow = null;
+
+const audioDir = path.join(__dirname, 'captures', 'audio');
+if (!fs.existsSync(audioDir)) {
+  fs.mkdirSync(audioDir, { recursive: true });
+}
+
+let audioPath = null;
+
+ipcMain.on('notification-send-capture', async (event, payload) => {
+  console.log('📥 Capture received from notification');
+
+  let audioPath = null;
+  const transcript = payload.audioTranscript || null;
+
+  try {
+    // ✅ SAVE AUDIO FIRST
+    if (payload.audioBuffer) {
+      const audioFilename = `audio_${Date.now()}.webm`;
+      audioPath = path.join(audioDir, audioFilename);
+
+      fs.writeFileSync(
+        audioPath,
+        Buffer.from(payload.audioBuffer)
+      );
+
+      console.log('🎧 Audio saved:', audioPath);
+    }
+
+    // ✅ SEND FILE PATHS ONLY
+    const result = await sendToBackend(
+      payload.screenshotPath,
+      payload.context,
+      audioPath,
+      payload.textNote || null,
+      transcript
+    );
+
+    console.log('✅ Backend response:', result);
+
+    // notify floating button safely
+    if (floatingButton && !floatingButton.isDestroyed()) {
+      floatingButton.webContents.send('capture-sent-success');
+    }
+
+  } catch (err) {
+    console.error('❌ Failed to send capture:', err);
+
+    if (floatingButton && !floatingButton.isDestroyed()) {
+      floatingButton.webContents.send('capture-sent-failed');
+    }
+  }
+
+  if (notificationWindow && !notificationWindow.isDestroyed()) {
+    notificationWindow.close();
+  }
+  notificationWindow = null;
+});
+
+
+
+ipcMain.on('show-capture-notification', (event, data) => {
+  console.log('🔔 Creating capture notification window...');
+
+  // Close any existing notification safely
+  if (notificationWindow && !notificationWindow.isDestroyed()) {
+    notificationWindow.close();
+  }
+  notificationWindow = null;
+
+  notificationWindow = new BrowserWindow({
+    width: 420,
+    height: 360,
+    frame: false,
+    transparent: true,
+    alwaysOnTop: true,
+    resizable: false,
+    skipTaskbar: true,
+    show: false,
+    webPreferences: {
+      preload: path.join(__dirname, 'preload.js'),
+      contextIsolation: true,
+      nodeIntegration: false,
+      devTools: true
+      // IMPORTANT: do NOT add sandbox:true
+    }
+  });
+
+  // Bottom-right like Teams
+  const display = screen.getPrimaryDisplay();
+  const { x, y, width, height } = display.workArea;
+  const margin = 16;
+  notificationWindow.setPosition(
+    x + width - 420 - margin,
+    y + height - 360 - margin
+  );
+
+  const notificationPath = path.join(__dirname, 'src', 'components', 'CaptureNotification.html');
+  console.log('📄 Loading notification from:', notificationPath);
+
+  // If load fails, log it clearly
+  notificationWindow.webContents.on('did-fail-load', (e, code, desc) => {
+    console.error('❌ Notification did-fail-load:', code, desc);
+  });
+
+  // If renderer throws JS errors, surface them
+  notificationWindow.webContents.on('console-message', (e, level, message) => {
+    console.log('🧩 Notification console:', message);
+  });
+
+  notificationWindow.loadFile(notificationPath).then(() => {
+    // This always runs once loadFile finishes
+    notificationWindow.webContents.send('capture-data', data);
+    notificationWindow.show(); // doesn't steal focus
+    console.log('✅ Notification window shown');
+  }).catch((err) => {
+    console.error('❌ Failed to load notification file:', err);
+    if (notificationWindow && !notificationWindow.isDestroyed()) {
+      notificationWindow.webContents.openDevTools();
+    }
+  });
+
+  notificationWindow.on('closed', () => {
+    notificationWindow = null;
+  });
+});
+
+
 
 // Async initialization function
 async function initializeStore() {
@@ -62,7 +190,7 @@ async function createMainWindow() {
 
   // Load your Next.js app
   //const startUrl = process.env.ELECTRON_START_URL || 'http://localhost:3000';
-const isAuthenticated = await TokenManager.isAuthenticated();
+  const isAuthenticated = await TokenManager.isAuthenticated();
 
   const startUrl = isAuthenticated
     ? 'http://localhost:3000/inbox'
@@ -94,17 +222,17 @@ function createFloatingButton() {
   const y = Math.min(savedPosition.y, height - 90);
 
   floatingButton = new BrowserWindow({
-    width: 90,
-    height: 90,
+    width: 400,  // ← Wider to fit horizontal menu
+    height: 160,// ← Changed from 90 (to fit menu)
     x: x,
     y: y,
-    frame: false,              // No window frame
-    transparent: true,         // Transparent background
-    alwaysOnTop: true,        // Always above other windows
+    frame: false,
+    transparent: true,
+    alwaysOnTop: true,
     resizable: false,
     movable: true,
-    skipTaskbar: true,        // Don't show in taskbar
-    focusable: false,         // Don't steal focus
+    skipTaskbar: true,
+    focusable: false,
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
@@ -113,8 +241,15 @@ function createFloatingButton() {
   });
 
   // Load the floating button HTML
-  floatingButton.loadFile(path.join(__dirname, 'floating-button.html'));
+  floatingButton.loadFile(path.join(__dirname, 'src', 'components', 'floating-button.html'));
 
+  floatingButton.webContents.on('did-fail-load', (event, errorCode, errorDescription) => {
+    console.error('❌ Floating button failed to load:', errorCode, errorDescription);
+  });
+
+  floatingButton.webContents.on('did-finish-load', () => {
+    console.log('✅ Floating button loaded successfully');
+  });
   // Keep window on top with highest priority
   floatingButton.setAlwaysOnTop(true, 'screen-saver');
   floatingButton.setVisibleOnAllWorkspaces(true);
@@ -260,22 +395,44 @@ async function getBrowserUrl(browserProcess) {
 }
 
 // Send capture to backend
-async function sendToBackend(screenshotPath, context) {
+// Send capture to backend (PATHS ONLY)
+async function sendToBackend(screenshotPath, context, audioPath, textNote, audioTranscript) {
   try {
     const FormData = (await import('form-data')).default;
     const fetch = (await import('node-fetch')).default;
 
+    // Get JWT token
+    const token = await TokenManager.getToken();
+
+    if (!token) {
+      console.warn('⚠️ No JWT token found, skipping backend upload');
+      return { success: false, error: 'Not authenticated' };
+    }
+
     const form = new FormData();
-    form.append('screenshot', fs.createReadStream(screenshotPath));
-    form.append('app_name', context.appName || 'Unknown');
-    form.append('window_title', context.windowTitle || 'Unknown');
-    form.append('url', context.url || '');
-    form.append('timestamp', context.timestamp);
+
+    // ✅ REQUIRED — backend expects this
+    form.append('screenshot_path', screenshotPath);
+
+    // ✅ OPTIONAL metadata (keep as-is if backend uses them)
+    if (context?.appName) form.append('app_name', context.appName);
+    if (context?.windowTitle) form.append('window_title', context.windowTitle);
+    if (context?.url) form.append('url', context.url);
+    if (context?.timestamp) form.append('timestamp', context.timestamp);
+    if (textNote) form.append('text_note', textNote);
+    if (audioPath) form.append('audio_path', audioPath);
+    if (audioTranscript) form.append('audio_transcript', audioTranscript);
+
+
+    const headers = {
+      ...form.getHeaders(),
+      Authorization: `Bearer ${token}`
+    };
 
     const response = await fetch(`${BACKEND_URL}/api/capture`, {
       method: 'POST',
       body: form,
-      headers: form.getHeaders()
+      headers
     });
 
     const result = await response.json();
@@ -284,10 +441,10 @@ async function sendToBackend(screenshotPath, context) {
 
   } catch (error) {
     console.error('❌ Backend error:', error.message);
-    // Return a fallback response so the app doesn't crash
     return { success: false, error: error.message };
   }
 }
+
 
 // Handle screenshot capture
 ipcMain.handle('capture-screenshot', async (event) => {
@@ -327,25 +484,32 @@ ipcMain.handle('capture-screenshot', async (event) => {
     fs.writeFileSync(screenshotPath, screenshot.toPNG());
     console.log('✅ Screenshot saved:', screenshotPath);
 
-    // Send to backend (if available)
-    let backendResult = null;
-    try {
-      backendResult = await sendToBackend(screenshotPath, context);
-      console.log('✅ Sent to backend:', backendResult);
-    } catch (backendError) {
-      console.warn('⚠️ Backend unavailable:', backendError.message);
-      // Continue without backend - save locally
-    }
+    // // Send to backend (if available)
+    // let backendResult = null;
+    // try {
+    //   backendResult = await sendToBackend(screenshotPath, context);
+    //   console.log('✅ Sent to backend:', backendResult);
+    // } catch (backendError) {
+    //   console.warn('⚠️ Backend unavailable:', backendError.message);
+    //   // Continue without backend - save locally
+    // }
 
     // Show success notification
     showNotification('Screenshot Captured! 📸', context.windowTitle || 'Processing...');
 
+    // return {
+    //   success: true,
+    //   itemId: backendResult?.item_id || 'local_' + Date.now(),
+    //   screenshotPath: screenshotPath,
+    //   context: context,
+    //   message: 'Screenshot captured successfully'
+    // };
+
     return {
       success: true,
-      itemId: backendResult?.item_id || 'local_' + Date.now(),
-      screenshotPath: screenshotPath,
-      context: context,
-      message: 'Screenshot captured successfully'
+      screenshotPath,
+      context,
+      capturedAt: Date.now()
     };
 
   } catch (error) {
@@ -358,6 +522,18 @@ ipcMain.handle('capture-screenshot', async (event) => {
     };
   }
 });
+
+ipcMain.handle('send-capture-to-backend', async (event, payload) => {
+  const { screenshotPath, context } = payload;
+
+  try {
+    const result = await sendToBackend(screenshotPath, context, audioPath);
+    return { success: true, result };
+  } catch (err) {
+    return { success: false, error: err.message };
+  }
+});
+
 
 // Show desktop notification
 function showNotification(title, body) {
@@ -420,15 +596,24 @@ ipcMain.handle('get-current-user', async (event) => {
   try {
     console.log('👤 Getting current user...');
 
+
     // Check if authenticated first
     const isAuth = await TokenManager.isAuthenticated();
-
-    if (!isAuth) {
-      throw new Error('Not authenticated');
-    }
+    console.log('🔐 Is authenticated?', isAuth);
 
     // Fetch user from backend
+    const token = await TokenManager.getToken();
+    console.log('🔐 JWT token exists?', !!token);
+
+    //const user = await CloudRunClient.getCurrentUser();
+
+    if (!isAuth) {
+      console.log('🚫 Not authenticated, skipping user fetch');
+      return { success: false };
+    }
+
     const user = await CloudRunClient.getCurrentUser();
+
 
     return {
       success: true,
@@ -492,6 +677,17 @@ ipcMain.handle('check-auth', async (event) => {
     };
   }
 });
+
+ipcMain.handle('get-auth-token', async () => {
+  try {
+    const token = await TokenManager.getToken();
+    return token || null;
+  } catch (e) {
+    console.error('❌ get-auth-token failed:', e);
+    return null;
+  }
+});
+
 
 
 // App lifecycle - INITIALIZE STORE FIRST

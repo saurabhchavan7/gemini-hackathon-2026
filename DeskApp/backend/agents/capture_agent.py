@@ -8,6 +8,8 @@ import json
 from datetime import datetime
 from pathlib import Path
 import os
+
+from matplotlib.style import context
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -55,6 +57,7 @@ def analyze_screenshot(screenshot_path: str) -> dict:
 }
 
 Be thorough with OCR. Extract EVERYTHING you can read."""
+
 
     try:
         # Send to Gemini 3 Flash (faster for vision tasks)
@@ -117,7 +120,7 @@ Be thorough with OCR. Extract EVERYTHING you can read."""
         }
 
 
-def process_capture(item_id: str, screenshot_path: str) -> dict:
+def process_capture(item_id: str, screenshot_path: str, context: None) -> dict:
     """
     Full capture processing pipeline:
     1. Analyze with Gemini
@@ -141,6 +144,82 @@ def process_capture(item_id: str, screenshot_path: str) -> dict:
     return result
 
 
+
+# def transcribe_audio(audio_path: str) -> str | None:
+#     try:
+#         if not audio_path or not os.path.exists(audio_path):
+#             return None
+
+#         with open(audio_path, "rb") as f:
+#             audio_bytes = f.read()
+
+#         response = client.models.generate_content(
+#             model="gemini-3-flash-preview",
+#             contents=[
+#                 genai.types.Part.from_bytes(
+#                     data=audio_bytes,
+#                     mime_type="audio/webm"
+#                 )
+#             ]
+#         )
+
+#         transcript = response.text.strip()
+#         return transcript if transcript else None
+
+#     except Exception as e:
+#         print("❌ Gemini audio transcription failed:", e)
+#         return None
+
+
+def transcribe_audio(audio_path: str) -> str | None:
+    """
+    Transcribe audio file using Gemini 2.0 Flash.
+    Optimized for high accuracy and minimal 'hallucination'.
+    """
+    try:
+        if not audio_path or not os.path.exists(audio_path):
+            print(f"⚠️ File not found: {audio_path}")
+            return None
+
+        print(f"🎤 Transcribing audio: {audio_path}")
+
+        with open(audio_path, "rb") as f:
+            audio_bytes = f.read()
+
+        # System instructions ground the model better than user prompts
+        instruction = "You are a professional transcriptionist. Transcribe the audio exactly as heard. Do not add commentary or descriptions."
+
+        response = client.models.generate_content(
+            model="gemini-2.0-flash", 
+            contents=[
+                types.Part.from_bytes(
+                    data=audio_bytes,
+                    mime_type="audio/webm"
+                ),
+                "Transcribe this audio. If silent, return [inaudible]."
+            ],
+            config=types.GenerateContentConfig(
+                system_instruction=instruction,
+                temperature=0.0, # Ensures consistency and prevents 'creative' transcripts
+                top_p=0.95,
+            )
+        )
+
+        if not response.text:
+            return None
+
+        transcript = response.text.strip()
+        
+        # Log success (shortened preview)
+        preview = (transcript[:100] + '..') if len(transcript) > 100 else transcript
+        print(f"✅ Transcribed: {preview}")
+        
+        return transcript
+
+    except Exception as e:
+        print(f"❌ Gemini transcription error: {e}")
+        return None
+    
 if __name__ == "__main__":
     # Test with most recent screenshot
     captures_dir = Path("./captures")
