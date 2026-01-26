@@ -29,6 +29,7 @@ from google import genai
 
 from models.database import init_database, get_connection
 from agents.capture_agent import process_capture  # Import the new agent
+from models.firestore_db import firestore_client
 
 app = FastAPI()
 
@@ -317,78 +318,115 @@ async def capture_screenshot(
         with open(audio_path, "wb") as f:
             f.write(audio_contents)
     
-    # 4. Analyze with Gemini (pass text_note as context)
+    # 4. Analyze with Gemini
     analysis_context = f"User note: {text_note}" if text_note else ""
     analysis = process_capture(item_id, screenshot_path, context=analysis_context)
     audio_transcript = None
     if audio_path:
         audio_transcript = transcribe_audio(audio_path)
 
-    # 5. Save to database (add user_id, text_note, audio_path)
-    conn = get_connection()
-    cursor = conn.cursor()
+    # # 5. Save to database (add user_id, text_note, audio_path)
+    # conn = get_connection()
+    # cursor = conn.cursor()
     
-    cursor.execute("""
-        INSERT INTO items (
-            id, user_id,
-            screenshot_path,
-            audio_path,
-            text_note,
-            audio_transcript,
-            app_name, window_title, url, timestamp,
-            extracted_text, content_type, title, entities, deadline,
-            created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    """, (
-        item_id,
-        user_id,
-        screenshot_path,
-        audio_path,
-        text_note,
-        audio_transcript,
-        app_name,
-        window_title,
-        url,
-        timestamp,
-        analysis["extracted_text"],
-        analysis["content_type"],
-        analysis["title"],
-        json.dumps(analysis["entities"]),
-        analysis["deadline"],
-        datetime.now().isoformat(), datetime.now().isoformat()
-    ))
+    # cursor.execute("""
+    #     INSERT INTO items (
+    #         id, user_id,
+    #         screenshot_path,
+    #         audio_path,
+    #         text_note,
+    #         audio_transcript,
+    #         app_name, window_title, url, timestamp,
+    #         extracted_text, content_type, title, entities, deadline,
+    #         created_at, updated_at
+    #     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    # """, (
+    #     item_id,
+    #     user_id,
+    #     screenshot_path,
+    #     audio_path,
+    #     text_note,
+    #     audio_transcript,
+    #     app_name,
+    #     window_title,
+    #     url,
+    #     timestamp,
+    #     analysis["extracted_text"],
+    #     analysis["content_type"],
+    #     analysis["title"],
+    #     json.dumps(analysis["entities"]),
+    #     analysis["deadline"],
+    #     datetime.now().isoformat(), datetime.now().isoformat()
+    # ))
     
-    conn.commit()
-    conn.close()
+    # conn.commit()
+    # conn.close()
+
+    # 5. PREPARE DATA FOR FIRESTORE (No SQL query needed!)
+    capture_data = {
+        "item_id": item_id,
+        "user_id": user_id,
+        "screenshot_path": screenshot_path,
+        "audio_path": audio_path,
+        "text_note": text_note,
+        "audio_transcript": audio_transcript,
+        "app_name": app_name,
+        "window_title": window_title,
+        "url": url,
+        "timestamp": timestamp,
+        # Flatten analysis data directly
+        "extracted_text": analysis.get("extracted_text"),
+        "content_type": analysis.get("content_type"),
+        "title": analysis.get("title"),
+        "entities": analysis.get("entities"), # Pass as dict/list, not string
+        "deadline": analysis.get("deadline"),
+        "is_archived": False
+    }
+
+    # SAVE TO FIRESTORE
+    firestore_client.save_capture(user_id, capture_data)
+
     print("audio_path:", audio_path)
     print("text_note:", text_note)  
     
     return {
         "success": True,
         "item_id": item_id,
-        "message": "Capture saved with enhancements"
+        "message": "Capture saved to Cloud Firestore"
     }
 
 
+# @app.get("/api/items")
+# def get_items(limit: int = 50):
+#     """Get recent captures"""
+#     conn = get_connection()
+#     conn.row_factory = sqlite3.Row
+#     cursor = conn.cursor()
+    
+#     cursor.execute("""
+#         SELECT * FROM items 
+#         WHERE is_archived = 0
+#         ORDER BY created_at DESC
+#         LIMIT ?
+#     """, (limit,))
+    
+#     items = [dict(row) for row in cursor.fetchall()]
+#     conn.close()
+    
+#     return {"items": items, "total": len(items)}
+
+
 @app.get("/api/items")
-def get_items(limit: int = 50):
-    """Get recent captures"""
-    conn = get_connection()
-    conn.row_factory = sqlite3.Row
-    cursor = conn.cursor()
-    
-    cursor.execute("""
-        SELECT * FROM items 
-        WHERE is_archived = 0
-        ORDER BY created_at DESC
-        LIMIT ?
-    """, (limit,))
-    
-    items = [dict(row) for row in cursor.fetchall()]
-    conn.close()
+def get_items(limit: int = 50, authorization: str = Header(None)):
+    # Verify User ID from token
+    if not authorization: return {"items": []}
+    token = authorization.replace("Bearer ", "")
+    user_id = jwt_manager.verify_jwt_token(token)["user_id"]
+
+    # Fetch from Firestore
+    items = firestore_client.get_user_captures(user_id, limit)
     
     return {"items": items, "total": len(items)}
-
 
 @app.get("/api/items/{item_id}")
 def get_item(item_id: str):
