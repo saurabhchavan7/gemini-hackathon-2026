@@ -562,29 +562,47 @@ ipcMain.on('toggle-button-visibility', (event, visible) => {
  * Handle Google OAuth login flow
  * Called from Login.jsx when user clicks "Sign in with Google"
  */
+// ipcMain.handle('google-login', async (event) => {
+//   try {
+//     console.log('🔐 Starting Google OAuth flow...');
+
+//     // Step 1: Open browser and get authorization code
+//     const authCode = await GoogleAuth.startOAuthFlow();
+//     console.log('✅ Got authorization code');
+
+//     // Step 2: Send code to backend, get JWT token
+//     const { token, user } = await CloudRunClient.login(authCode);
+//     console.log('✅ Login successful:', user.email);
+
+//     return {
+//       success: true,
+//       user: user
+//     };
+
+//   } catch (error) {
+//     console.error('❌ Login failed:', error);
+//     return {
+//       success: false,
+//       error: error.message
+//     };
+//   }
+// });
+
+
+
 ipcMain.handle('google-login', async (event) => {
   try {
-    console.log('🔐 Starting Google OAuth flow...');
-
-    // Step 1: Open browser and get authorization code
     const authCode = await GoogleAuth.startOAuthFlow();
-    console.log('✅ Got authorization code');
-
-    // Step 2: Send code to backend, get JWT token
     const { token, user } = await CloudRunClient.login(authCode);
-    console.log('✅ Login successful:', user.email);
 
-    return {
-      success: true,
-      user: user
-    };
+    // ADD THIS: Create the button upon successful login
+    if (!floatingButton || floatingButton.isDestroyed()) {
+      createFloatingButton();
+    }
 
+    return { success: true, user: user };
   } catch (error) {
-    console.error('❌ Login failed:', error);
-    return {
-      success: false,
-      error: error.message
-    };
+    return { success: false, error: error.message };
   }
 });
 
@@ -633,25 +651,35 @@ ipcMain.handle('get-current-user', async (event) => {
  * Handle logout
  * Called from Dashboard.jsx logout button
  */
+// ipcMain.handle('logout', async (event) => {
+//   try {
+//     await TokenManager.clearToken();
+
+//     // ADD THIS: Destroy the floating button on logout
+//     if (floatingButton && !floatingButton.isDestroyed()) {
+//       floatingButton.close();
+//       floatingButton = null;
+//     }
+
+//     return { success: true };
+//   } catch (error) {
+//     return { success: false, error: error.message };
+//   }
+// });
+
 ipcMain.handle('logout', async (event) => {
   try {
-    console.log('🚪 Logging out...');
-
-    // Clear all authentication data
     await TokenManager.clearToken();
 
-    console.log('✅ Logout successful');
+    // ADD THIS: Close the button on logout
+    if (floatingButton && !floatingButton.isDestroyed()) {
+      floatingButton.close();
+      floatingButton = null;
+    }
 
-    return {
-      success: true
-    };
-
+    return { success: true };
   } catch (error) {
-    console.error('❌ Logout failed:', error);
-    return {
-      success: false,
-      error: error.message
-    };
+    return { success: false, error: error.message };
   }
 });
 
@@ -659,24 +687,41 @@ ipcMain.handle('logout', async (event) => {
  * Check authentication status
  * Useful for route guards and auto-login
  */
+// ipcMain.handle('check-auth', async (event) => {
+//   try {
+//     const isAuth = await TokenManager.isAuthenticated();
+//     const user = isAuth ? await TokenManager.getUser() : null;
+
+//     return {
+//       isAuthenticated: isAuth,
+//       user: user
+//     };
+
+//   } catch (error) {
+//     console.error('❌ Auth check failed:', error);
+//     return {
+//       isAuthenticated: false,
+//       user: null
+//     };
+//   }
+// });
+
 ipcMain.handle('check-auth', async (event) => {
   try {
     const isAuth = await TokenManager.isAuthenticated();
     const user = isAuth ? await TokenManager.getUser() : null;
 
-    return {
-      isAuthenticated: isAuth,
-      user: user
-    };
+    // ADD THIS: If user is already authenticated (auto-login), show button
+    if (isAuth && (!floatingButton || floatingButton.isDestroyed())) {
+      createFloatingButton();
+    }
 
+    return { isAuthenticated: isAuth, user: user };
   } catch (error) {
-    console.error('❌ Auth check failed:', error);
-    return {
-      isAuthenticated: false,
-      user: null
-    };
+    return { isAuthenticated: false, user: null };
   }
 });
+
 
 ipcMain.handle('get-auth-token', async () => {
   try {
@@ -702,7 +747,7 @@ app.whenReady().then(async () => {
   createMainWindow();
 
   // Create floating button
-  createFloatingButton();
+  // createFloatingButton();
 
   // Register keyboard shortcuts
   registerShortcuts();
