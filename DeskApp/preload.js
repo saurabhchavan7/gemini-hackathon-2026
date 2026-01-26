@@ -1,56 +1,40 @@
 /**
- * preload.js
- * 
- * Purpose: Bridge between Electron main process and renderer (React/Next.js)
- * 
- * Security:
- * - Uses contextBridge to safely expose APIs
- * - Prevents direct Node.js access from renderer
- * - Only exposes specific, controlled functions
- * 
- * Available APIs:
- * - Screenshot capture (existing)
- * - OAuth login flow (new)
- * - User authentication (new)
- * - Logout (new)
+ * preload.js - FIXED VERSION
+ * No duplicates, clean structure
  */
 
 const { contextBridge, ipcRenderer } = require('electron');
 
-// Expose Electron APIs to renderer process
 contextBridge.exposeInMainWorld('electronAPI', {
-  
-  // ============================================
-  // EXISTING CAPTURE APIs (keep these)
-  // ============================================
-  
-  /**
-   * Capture screenshot with context
-   * @returns {Promise<object>} - Capture result
-   */
+
+  // CAPTURE APIs
+  getAuthToken: () => ipcRenderer.invoke('get-auth-token'),
+
   captureScreenshot: () => ipcRenderer.invoke('capture-screenshot'),
   
-  /**
-   * Listen for keyboard shortcut trigger
-   * @param {function} callback - Function to call when shortcut pressed
-   */
-  onCaptureShortcut: (callback) => ipcRenderer.on('capture-shortcut', callback),
-  
-  /**
-   * Toggle floating button visibility
-   * @param {boolean} visible - Show/hide button
-   */
-  toggleButtonVisibility: (visible) => ipcRenderer.send('toggle-button-visibility', visible),
-  
-  // ============================================
-  // NEW OAUTH & AUTH APIs
-  // ============================================
-  
-  /**
-   * Start Google OAuth login flow
-   * Opens browser, returns user data on success
-   * @returns {Promise<object>} - { success: boolean, user?: object, error?: string }
-   */
+  showCaptureNotification: (data) =>
+  ipcRenderer.send('show-capture-notification', data),
+
+
+  sendCaptureToBackend: (payload) =>
+    ipcRenderer.invoke('send-capture-to-backend', payload),
+
+  sendCaptureFromNotification: (data) =>
+    ipcRenderer.send('notification-send-capture', data),
+
+  onCaptureShortcut: (callback) =>
+    ipcRenderer.on('capture-shortcut', callback),
+
+  onCaptureSentSuccess: (cb) =>
+    ipcRenderer.on('capture-sent-success', cb),
+
+  onCaptureData: (callback) =>
+    ipcRenderer.on('capture-data', (_, data) => callback(data)),
+
+  toggleButtonVisibility: (visible) => 
+    ipcRenderer.send('toggle-button-visibility', visible),
+
+  // AUTH APIs
   googleLogin: async () => {
     try {
       const result = await ipcRenderer.invoke('google-login');
@@ -60,15 +44,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
       return { success: false, error: error.message };
     }
   },
-  
-  /**
-   * Get current authenticated user
-   * @returns {Promise<object>} - User data or error
-   */
+
   getCurrentUser: async () => {
     try {
       const result = await ipcRenderer.invoke('get-current-user');
-      
       if (result.success) {
         return result.user;
       } else {
@@ -79,11 +58,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
       throw error;
     }
   },
-  
-  /**
-   * Logout and clear authentication
-   * @returns {Promise<object>} - { success: boolean }
-   */
+
   logout: async () => {
     try {
       const result = await ipcRenderer.invoke('logout');
@@ -93,11 +68,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
       return { success: false, error: error.message };
     }
   },
-  
-  /**
-   * Check if user is authenticated
-   * @returns {Promise<object>} - { isAuthenticated: boolean, user?: object }
-   */
+
   checkAuth: async () => {
     try {
       const result = await ipcRenderer.invoke('check-auth');
@@ -107,19 +78,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
       return { isAuthenticated: false, user: null };
     }
   },
-  
-  // ============================================
-  // PLATFORM INFO (keep these)
-  // ============================================
-  
-  /**
-   * Get platform information
-   */
+
+  // PLATFORM INFO
   platform: process.platform,
-  
-  /**
-   * Get version information
-   */
+
   versions: {
     node: process.versions.node,
     chrome: process.versions.chrome,
@@ -127,4 +89,4 @@ contextBridge.exposeInMainWorld('electronAPI', {
   }
 });
 
-console.log('✅ Preload script loaded with OAuth support');
+console.log('✅ Preload script loaded');

@@ -21,9 +21,15 @@ import os
 import uuid
 import sqlite3
 import json
+from agents.capture_agent import transcribe_audio
+
+from fastapi import WebSocket, WebSocketDisconnect, Query
+import asyncio
+from google import genai
 
 from models.database import init_database, get_connection
 from agents.capture_agent import process_capture  # Import the new agent
+from models.firestore_db import firestore_client
 
 app = FastAPI()
 
@@ -200,112 +206,227 @@ def root():
     return {"status": "LifeOS Backend Running"}
 
 
+@app.websocket("/ws/transcribe")
+async def ws_transcribe(websocket: WebSocket, token: str = Query(default="")):
+    """
+    Client sends binary PCM16 (16kHz mono) frames.
+    Server streams to Gemini Live, returns partial transcripts as JSON text frames.
+    """
+    await websocket.accept()
+
+    # TODO (optional): verify JWT token here (you already verify in HTTP routes).
+    # For now keep it permissive during dev:
+    # if not token: await websocket.close(code=4401); return
+
+    client = genai.Client()
+
+    MODEL = "gemini-2.5-flash-native-audio-preview-12-2025"
+    CONFIG = {
+        "response_modalities": ["TEXT"],
+        "system_instruction": (
+            "You are a transcription engine. "
+            "Transcribe the user's speech verbatim. "
+            "Return only transcript text, no extra commentary."
+        ),
+    }
+
+    try:
+        async with client.aio.live.connect(model=MODEL, config=CONFIG) as live_session:
+
+            async def forward_audio():
+                while True:
+                    data = await websocket.receive_bytes()  # PCM16 bytes
+                    # Gemini Live wants PCM audio
+                    await live_session.send_realtime_input(
+                        audio={"data": data, "mime_type": "audio/pcm;rate=16000"}
+                    )
+
+            async def forward_text():
+                while True:
+                    turn = live_session.receive()
+                    async for resp in turn:
+                        # Extract text parts (best-effort; message structure varies)
+                        text_out = None
+                        if getattr(resp, "server_content", None) and getattr(resp.server_content, "model_turn", None):
+                            parts = resp.server_content.model_turn.parts or []
+                            for p in parts:
+                                # Some SDK builds provide p.text
+                                if getattr(p, "text", None):
+                                    text_out = (text_out or "") + p.text
+
+                        if text_out:
+                            await websocket.send_json({"type": "partial", "text": text_out})
+
+            async with asyncio.TaskGroup() as tg:
+                tg.create_task(forward_audio())
+                tg.create_task(forward_text())
+
+    except WebSocketDisconnect:
+        return
+    except Exception as e:
+        await websocket.send_json({"type": "error", "error": str(e)})
+        await websocket.close()
+
+
 @app.post("/api/capture")
 async def capture_screenshot(
-    screenshot: UploadFile = File(...),
+    screenshot_path: str = Form(...),
     app_name: str = Form("Unknown"),
     window_title: str = Form("Unknown"),
     url: str = Form(""),
-    timestamp: str = Form("")
+    timestamp: str = Form(""),
+    text_note: str = Form(None),  # Optional text annotation
+    audio_note: UploadFile = File(None),  # Optional audio file
+    audio_path: str = Form(None),
+    authorization: str = Header(None),  # JWT token
+    audio_transcript: str = Form(None),
+
 ):
     """
-    Receive a capture from Electron app:
-    1. Save screenshot file
-    2. Analyze with Gemini Vision
-    3. Store to database
+    Enhanced capture endpoint with multi-modal input
     """
+    
+    # 1. Verify JWT token
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    
+    token = authorization.replace("Bearer ", "")
     try:
-        # Generate unique ID
-        item_id = str(uuid.uuid4())[:8]
-        
-        # Save screenshot file
-        filename = f"{item_id}.png"
-        filepath = os.path.join(CAPTURES_DIR, filename)
-        
-        contents = await screenshot.read()
-        with open(filepath, "wb") as f:
-            f.write(contents)
-        
-        print(f"📸 Screenshot saved: {item_id}")
-        
-        # PHASE 2A: Analyze with Gemini
-        print(f"🔍 Analyzing with Gemini...")
-        analysis = process_capture(item_id, filepath)
-        
-        # Save to database
-        conn = get_connection()
-        cursor = conn.cursor()
-        
-        now = datetime.now().isoformat()
-        
-        cursor.execute("""
-            INSERT INTO items (
-                id, screenshot_path, app_name, window_title, url, timestamp,
-                extracted_text, content_type, title, entities, deadline, deadline_text,
-                created_at, updated_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        """, (
-            item_id,
-            filepath,
-            app_name,
-            window_title,
-            url if url else None,
-            timestamp or now,
-            analysis.get("extracted_text", ""),
-            analysis.get("content_type", "unknown"),
-            analysis.get("title", ""),
-            analysis.get("entities", ""),
-            analysis.get("deadline"),
-            analysis.get("deadline_text", ""),
-            now,
-            now
-        ))
-        
-        conn.commit()
-        conn.close()
-        
-        print(f"✅ Capture complete: {item_id}")
-        print(f"   Content Type: {analysis.get('content_type')}")
-        print(f"   Title: {analysis.get('title')[:50]}")
-        
-        return {
-            "success": True,
-            "item_id": item_id,
-            "content_type": analysis.get("content_type"),
-            "title": analysis.get("title"),
-            "deadline": analysis.get("deadline"),
-            "message": "Capture analyzed and saved"
-        }
-        
-    except Exception as e:
-        print(f"❌ Capture error: {e}")
-        import traceback
-        traceback.print_exc()
-        return {
-            "success": False,
-            "error": str(e)
-        }
+        payload = jwt_manager.verify_jwt_token(token)
+        user_id = payload["user_id"]
+    except:
+        raise HTTPException(status_code=401, detail="Invalid token")
+    
+    # 2. Generate capture ID (no file write)
+    item_id = str(uuid.uuid4())[:8]
+
+    # 2. Save screenshot
+    # item_id = str(uuid.uuid4())[:8]
+    # filename = f"{item_id}.png"
+    # filepath = os.path.join(CAPTURES_DIR, filename)
+    
+    # contents = await screenshot.read()
+    # with open(filepath, "wb") as f:
+    #     f.write(contents)
+    
+    # 3. Save audio note if provided
+    
+    if audio_note:
+        audio_filename = f"{item_id}_audio.webm"
+        audio_path = os.path.join(CAPTURES_DIR, audio_filename)
+        audio_contents = await audio_note.read()
+        with open(audio_path, "wb") as f:
+            f.write(audio_contents)
+    
+    # 4. Analyze with Gemini
+    analysis_context = f"User note: {text_note}" if text_note else ""
+    analysis = process_capture(item_id, screenshot_path, context=analysis_context)
+    audio_transcript = None
+    if audio_path:
+        audio_transcript = transcribe_audio(audio_path)
+
+    # # 5. Save to database (add user_id, text_note, audio_path)
+    # conn = get_connection()
+    # cursor = conn.cursor()
+    
+    # cursor.execute("""
+    #     INSERT INTO items (
+    #         id, user_id,
+    #         screenshot_path,
+    #         audio_path,
+    #         text_note,
+    #         audio_transcript,
+    #         app_name, window_title, url, timestamp,
+    #         extracted_text, content_type, title, entities, deadline,
+    #         created_at, updated_at
+    #     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    # """, (
+    #     item_id,
+    #     user_id,
+    #     screenshot_path,
+    #     audio_path,
+    #     text_note,
+    #     audio_transcript,
+    #     app_name,
+    #     window_title,
+    #     url,
+    #     timestamp,
+    #     analysis["extracted_text"],
+    #     analysis["content_type"],
+    #     analysis["title"],
+    #     json.dumps(analysis["entities"]),
+    #     analysis["deadline"],
+    #     datetime.now().isoformat(), datetime.now().isoformat()
+    # ))
+    
+    # conn.commit()
+    # conn.close()
+
+    # 5. PREPARE DATA FOR FIRESTORE (No SQL query needed!)
+    capture_data = {
+        "item_id": item_id,
+        "user_id": user_id,
+        "screenshot_path": screenshot_path,
+        "audio_path": audio_path,
+        "text_note": text_note,
+        "audio_transcript": audio_transcript,
+        "app_name": app_name,
+        "window_title": window_title,
+        "url": url,
+        "timestamp": timestamp,
+        # Flatten analysis data directly
+        "extracted_text": analysis.get("extracted_text"),
+        "content_type": analysis.get("content_type"),
+        "title": analysis.get("title"),
+        "entities": analysis.get("entities"), # Pass as dict/list, not string
+        "deadline": analysis.get("deadline"),
+        "is_archived": False
+    }
+
+    # SAVE TO FIRESTORE
+    firestore_client.save_capture(user_id, capture_data)
+
+    print("audio_path:", audio_path)
+    print("text_note:", text_note)  
+    
+    return {
+        "success": True,
+        "item_id": item_id,
+        "message": "Capture saved to Cloud Firestore"
+    }
+
+
+# @app.get("/api/items")
+# def get_items(limit: int = 50):
+#     """Get recent captures"""
+#     conn = get_connection()
+#     conn.row_factory = sqlite3.Row
+#     cursor = conn.cursor()
+    
+#     cursor.execute("""
+#         SELECT * FROM items 
+#         WHERE is_archived = 0
+#         ORDER BY created_at DESC
+#         LIMIT ?
+#     """, (limit,))
+    
+#     items = [dict(row) for row in cursor.fetchall()]
+#     conn.close()
+    
+#     return {"items": items, "total": len(items)}
 
 
 @app.get("/api/items")
-def get_items(limit: int = 50):
-    """Get recent captures"""
-    conn = get_connection()
-    conn.row_factory = sqlite3.Row
-    cursor = conn.cursor()
-    
-    cursor.execute("""
-        SELECT * FROM items 
-        WHERE is_archived = 0
-        ORDER BY created_at DESC
-        LIMIT ?
-    """, (limit,))
-    
-    items = [dict(row) for row in cursor.fetchall()]
-    conn.close()
+def get_items(limit: int = 50, authorization: str = Header(None)):
+    # Verify User ID from token
+    if not authorization: return {"items": []}
+    token = authorization.replace("Bearer ", "")
+    user_id = jwt_manager.verify_jwt_token(token)["user_id"]
+
+    # Fetch from Firestore
+    items = firestore_client.get_user_captures(user_id, limit)
     
     return {"items": items, "total": len(items)}
-
 
 @app.get("/api/items/{item_id}")
 def get_item(item_id: str):

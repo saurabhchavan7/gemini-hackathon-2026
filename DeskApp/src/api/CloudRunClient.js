@@ -41,12 +41,12 @@ apiClient.interceptors.request.use(
   async (config) => {
     // Get token from storage
     const token = await TokenManager.getToken();
-    
+
     // Add Authorization header if token exists
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
-    
+
     console.log(`📤 API Request: ${config.method.toUpperCase()} ${config.url}`);
     return config;
   },
@@ -66,14 +66,14 @@ apiClient.interceptors.response.use(
   },
   async (error) => {
     console.error('❌ API Error:', error.message);
-    
+
     // Handle 401 Unauthorized - token expired or invalid
     if (error.response && error.response.status === 401) {
       console.log('🔐 Unauthorized - clearing token');
       await TokenManager.clearToken();
       // Could trigger a re-login flow here
     }
-    
+
     return Promise.reject(error);
   }
 );
@@ -82,7 +82,7 @@ apiClient.interceptors.response.use(
  * CloudRunClient - All API methods
  */
 const CloudRunClient = {
-  
+
   /**
    * Login with Google OAuth authorization code
    * @param {string} authCode - Authorization code from Google OAuth
@@ -91,23 +91,23 @@ const CloudRunClient = {
   async login(authCode) {
     try {
       console.log('🔐 Sending authorization code to backend...');
-      
+
       const response = await apiClient.post('/auth/google/login', {
         code: authCode
       });
-      
+
       const { token, user } = response.data;
-      
+
       // Save token and user info
       await TokenManager.saveToken(token);
       await TokenManager.saveUser(user);
-      
+
       console.log('✅ Login successful:', user.email);
       return { token, user };
-      
+
     } catch (error) {
       console.error('❌ Login failed:', error.message);
-      
+
       // Provide user-friendly error messages
       if (error.response) {
         // Server responded with error
@@ -129,26 +129,42 @@ const CloudRunClient = {
   async getCurrentUser() {
     try {
       console.log('👤 Fetching user info...');
-      
-      const response = await apiClient.get('/api/user/me');
-      const user = response.data;
-      
-      // Update stored user info
+
+      const token = await TokenManager.getToken();
+      if (!token) {
+        throw new Error('No token available');
+      }
+
+      const response = await fetch(`${BASE_URL}/api/user/me`, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+
+      console.log('📥 Raw response status:', response.status);
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+      }
+
+      const user = await response.json();   // ✅ THIS WAS MISSING
+
+      // Validate payload
+      if (!user || !user.email) {
+        throw new Error('Invalid user payload');
+      }
+
       await TokenManager.saveUser(user);
-      
+
       console.log('✅ User info retrieved:', user.email);
       return user;
-      
+
     } catch (error) {
       console.error('❌ Failed to get user info:', error.message);
-      
-      if (error.response && error.response.status === 401) {
-        throw new Error('Not authenticated. Please log in again.');
-      }
-      
       throw new Error('Failed to retrieve user information');
     }
-  },
+  }
+  ,
 
   /**
    * Upload capture (screenshot + context)
@@ -158,12 +174,12 @@ const CloudRunClient = {
   async uploadCapture(captureData) {
     try {
       console.log('📸 Uploading capture...');
-      
+
       const response = await apiClient.post('/api/capture', captureData);
-      
+
       console.log('✅ Capture uploaded:', response.data.item_id);
       return response.data;
-      
+
     } catch (error) {
       console.error('❌ Failed to upload capture:', error.message);
       throw new Error('Failed to upload capture');
@@ -178,12 +194,12 @@ const CloudRunClient = {
   async getCaptures(params = {}) {
     try {
       console.log('📋 Fetching captures...');
-      
+
       const response = await apiClient.get('/api/captures', { params });
-      
+
       console.log(`✅ Retrieved ${response.data.length} captures`);
       return response.data;
-      
+
     } catch (error) {
       console.error('❌ Failed to get captures:', error.message);
       throw new Error('Failed to retrieve captures');
@@ -198,12 +214,12 @@ const CloudRunClient = {
   async searchCaptures(query) {
     try {
       console.log('🔍 Searching captures:', query);
-      
+
       const response = await apiClient.post('/api/search', { query });
-      
+
       console.log(`✅ Found ${response.data.results.length} results`);
       return response.data.results;
-      
+
     } catch (error) {
       console.error('❌ Search failed:', error.message);
       throw new Error('Search failed');

@@ -1,0 +1,578 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>LifeOS Capture Button</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      padding: 0;
+      background: transparent;
+      overflow: hidden;
+      font-family: 'Google Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
+    }
+
+    .button-wrapper {
+      position: relative;
+      -webkit-app-region: drag;
+      cursor: move;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 110px;
+      height: 110px;
+    }
+
+    /* Outer draggable ring - Solid, colored, FULLY DRAGGABLE */
+    .drag-ring {
+      position: absolute;
+      width: 104px;
+      height: 104px;
+      border-radius: 50%;
+      border: 4px solid rgba(26, 115, 232, 0.3);
+      background: transparent;
+      transition: all 0.3s ease;
+      z-index: 1;
+      -webkit-app-region: drag;
+      cursor: move;
+    }
+
+    .button-wrapper:hover .drag-ring {
+      border-color: rgba(26, 115, 232, 0.6);
+      border-width: 5px;
+      background: rgba(26, 115, 232, 0.05);
+    }
+
+    .button-wrapper.dragging .drag-ring {
+      border-color: #1a73e8;
+      border-width: 6px;
+      background: rgba(26, 115, 232, 0.1);
+    }
+
+    .main-button {
+      width: 56px;
+      height: 56px;
+      border-radius: 50%;
+      background: #1a73e8;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15), 0 4px 16px rgba(0, 0, 0, 0.12);
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+      -webkit-app-region: no-drag;
+      position: relative;
+      user-select: none;
+      z-index: 10;
+    }
+
+    .main-button:hover {
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2), 0 8px 24px rgba(0, 0, 0, 0.15);
+      transform: scale(1.05);
+    }
+
+    .main-button:active {
+      transform: scale(0.95);
+      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
+    }
+
+    .main-button.capturing {
+      background: #34a853;
+    }
+
+    .main-button.processing {
+      background: #fbbc04;
+    }
+
+    .main-icon {
+      font-size: 28px;
+      line-height: 1;
+      user-select: none;
+      pointer-events: none;
+    }
+
+    .close-button {
+      position: absolute;
+      top: -8px;
+      right: -8px;
+      width: 24px;
+      height: 24px;
+      border-radius: 50%;
+      background: #ea4335;
+      color: white;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      font-size: 14px;
+      font-weight: bold;
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+      transition: all 0.2s ease;
+      -webkit-app-region: no-drag;
+      z-index: 10;
+    }
+
+    .main-button:hover .close-button {
+      display: flex;
+    }
+
+    .close-button:hover {
+      background: #d33b2c;
+      transform: scale(1.1);
+    }
+
+    .menu-container {
+      position: absolute;
+      top: 50%;
+      transform: translateY(-50%);
+      opacity: 0;
+      pointer-events: none;
+      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+      -webkit-app-region: no-drag;
+      z-index: 100;
+    }
+
+    .menu-container {
+      left: 70px;
+      transform: translateY(-50%) translateX(-20px);
+    }
+
+    .menu-container.left-side {
+      left: auto;
+      right: 70px;
+      transform: translateY(-50%) translateX(20px);
+    }
+
+    .menu-container.show {
+      opacity: 1;
+      pointer-events: all;
+    }
+
+    .menu-container.show {
+      transform: translateY(-50%) translateX(0);
+    }
+
+    .menu-container.show.left-side {
+      transform: translateY(-50%) translateX(0);
+    }
+
+    .menu-options {
+      display: flex;
+      flex-direction: row;
+      gap: 8px;
+      align-items: center;
+    }
+
+    .menu-item {
+      width: 48px;
+      height: 48px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+      background: white;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15), 0 4px 16px rgba(0, 0, 0, 0.12);
+      font-size: 24px;
+    }
+
+    .menu-item:hover {
+      transform: scale(1.1);
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2), 0 8px 24px rgba(0, 0, 0, 0.15);
+    }
+
+    .menu-item:active {
+      transform: scale(0.95);
+    }
+
+    .menu-item.text {
+      background: #e8f0fe;
+    }
+
+    .menu-item.audio {
+      background: #fce8e6;
+    }
+
+    .menu-item.file {
+      background: #e6f4ea;
+    }
+
+    .tooltip {
+      position: absolute;
+      bottom: -40px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(60, 64, 67, 0.95);
+      color: white;
+      padding: 8px 12px;
+      border-radius: 8px;
+      font-size: 12px;
+      font-weight: 500;
+      white-space: nowrap;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.2s ease;
+      z-index: 1000;
+      -webkit-app-region: no-drag;
+    }
+
+    .tooltip.show {
+      opacity: 1;
+    }
+
+    .spinner {
+      position: absolute;
+      width: 100%;
+      height: 100%;
+      border-radius: 50%;
+      border: 3px solid rgba(255, 255, 255, 0.3);
+      border-top-color: white;
+      animation: spin 0.8s linear infinite;
+      display: none;
+    }
+
+    .main-button.processing .spinner {
+      display: block;
+    }
+
+    @keyframes spin {
+      to {
+        transform: rotate(360deg);
+      }
+    }
+
+    .backdrop {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: transparent;
+      display: none;
+      z-index: 50;
+      -webkit-app-region: no-drag;
+    }
+
+    .backdrop.show {
+      display: block;
+    }
+  </style>
+</head>
+
+<body>
+  <div class="button-wrapper" id="buttonWrapper">
+    <div class="drag-ring" id="dragRing"></div>
+    <div class="main-button" id="mainButton">
+      <div class="main-icon" id="mainIcon">📸</div>
+      <div class="spinner"></div>
+      <div class="close-button" id="closeButton">×</div>
+    </div>
+    <div class="menu-container" id="menuContainer">
+      <div class="menu-options">
+        <div class="menu-item text" data-action="text" title="Text Note">📝</div>
+        <div class="menu-item audio" data-action="audio" title="Audio Note">🎤</div>
+        <div class="menu-item file" data-action="file" title="Attach File">📎</div>
+      </div>
+    </div>
+    <div class="backdrop" id="backdrop"></div>
+    <div class="tooltip" id="tooltip">Click to capture</div>
+  </div>
+
+  <script>
+    const mainButton = document.getElementById('mainButton');
+    const closeButton = document.getElementById('closeButton');
+    const menuContainer = document.getElementById('menuContainer');
+    const backdrop = document.getElementById('backdrop');
+    const tooltip = document.getElementById('tooltip');
+    const mainIcon = document.getElementById('mainIcon');
+    const menuItems = document.querySelectorAll('.menu-item');
+    const buttonWrapper = document.getElementById('buttonWrapper');
+    const dragRing = document.getElementById('dragRing');
+
+    let isCapturing = false;
+    let clickCount = 0;
+    let clickTimer = null;
+    let isDragging = false;
+    let pendingCapture = null;
+    let autoSendTimer = null;
+
+    function updateMenuPosition() {
+      if (!window.electronAPI) return;
+      const bounds = window.screen;
+      const buttonX = window.screenX;
+      const screenWidth = bounds.availWidth;
+      if (buttonX > screenWidth / 2) {
+        menuContainer.classList.add('left-side');
+      } else {
+        menuContainer.classList.remove('left-side');
+      }
+    }
+
+    window.electronAPI.onCaptureSentSuccess(() => {
+      tooltip.textContent = 'Saved ✅';
+      tooltip.classList.add('show');
+      isCapturing = false;
+      pendingCapture = null;
+      mainButton.classList.remove('processing');
+      setTimeout(() => {
+        tooltip.classList.remove('show');
+      }, 2000);
+    });
+
+    let dragTimeout;
+    window.addEventListener('mousemove', () => {
+      if (!isDragging) {
+        isDragging = true;
+        buttonWrapper.classList.add('dragging');
+        clearTimeout(dragTimeout);
+        dragTimeout = setTimeout(() => {
+          isDragging = false;
+          buttonWrapper.classList.remove('dragging');
+          updateMenuPosition();
+        }, 500);
+      }
+    });
+
+    document.addEventListener('click', (e) => {
+      if (menuContainer.classList.contains('show')) {
+        if (!menuContainer.contains(e.target) && !mainButton.contains(e.target)) {
+          closeMenu();
+        }
+      }
+    });
+
+    backdrop.addEventListener('click', (e) => {
+      e.stopPropagation();
+      closeMenu();
+    });
+
+    mainButton.addEventListener('click', (e) => {
+      e.stopPropagation();
+      clickCount++;
+      if (clickCount === 1) {
+        clickTimer = setTimeout(() => {
+          handleSingleClick();
+          clickCount = 0;
+        }, 250);
+      } else if (clickCount === 2) {
+        clearTimeout(clickTimer);
+        handleDoubleClick();
+        clickCount = 0;
+      }
+    });
+
+    async function handleSingleClick() {
+      if (isCapturing) return;
+      console.log('📸 Single click - Capturing screenshot...');
+      await captureScreenshot();
+    }
+
+    function handleDoubleClick() {
+      console.log('👆 Double click - Opening menu...');
+      if (menuContainer.classList.contains('show')) {
+        closeMenu();
+      } else {
+        openMenu();
+      }
+    }
+
+    function openMenu() {
+      updateMenuPosition();
+      menuContainer.classList.add('show');
+      backdrop.classList.add('show');
+      tooltip.classList.remove('show');
+    }
+
+    function closeMenu() {
+      menuContainer.classList.remove('show');
+      backdrop.classList.remove('show');
+    }
+
+    closeButton.addEventListener('click', (e) => {
+      e.stopPropagation();
+      console.log('❌ Closing floating button...');
+      if (window.electronAPI && window.electronAPI.toggleButtonVisibility) {
+        window.electronAPI.toggleButtonVisibility(false);
+      }
+      mainButton.style.transform = 'scale(0)';
+      mainButton.style.opacity = '0';
+    });
+
+    menuItems.forEach(item => {
+      item.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const action = item.dataset.action;
+        console.log(`✅ Menu item clicked: ${action}`);
+        closeMenu();
+        switch (action) {
+          case 'text':
+            handleTextNote();
+            break;
+          case 'audio':
+            handleAudioNote();
+            break;
+          case 'file':
+            handleFileAttach();
+            break;
+        }
+      });
+    });
+
+    async function captureScreenshot() {
+      if (isCapturing) {
+        console.log('⚠️ Already capturing, ignoring...');
+        return;
+      }
+      
+      isCapturing = true;
+
+      try {
+        mainButton.classList.add('capturing');
+        tooltip.textContent = 'Capturing...';
+        tooltip.classList.add('show');
+
+        console.log('📸 Calling captureScreenshot IPC...');
+        
+        const result = await window.electronAPI.captureScreenshot();
+        
+        console.log('📸 Capture result:', result);
+        
+        if (!result.success) {
+          throw new Error(result.error || 'Capture failed');
+        }
+
+        pendingCapture = result;
+        
+        await showCaptureNotification(result);
+
+      } catch (error) {
+        console.error('❌ Screenshot capture error:', error);
+        mainButton.classList.remove('capturing', 'processing');
+        mainIcon.textContent = '❌';
+        tooltip.textContent = 'Capture failed!';
+        setTimeout(() => {
+          mainIcon.textContent = '📸';
+          tooltip.classList.remove('show');
+          isCapturing = false;
+        }, 2000);
+      }
+    }
+
+    async function showCaptureNotification(capture) {
+      tooltip.textContent = 'Review & Send';
+      tooltip.classList.add('show');
+
+      try {
+        console.log('🔔 Calling showCaptureNotification IPC...');
+        console.log('📸 Capture data:', {
+          screenshotPath: capture.screenshotPath,
+          hasContext: !!capture.context,
+          capturedAt: capture.capturedAt
+        });
+        
+        const result = await window.electronAPI.showCaptureNotification({
+          screenshotPath: capture.screenshotPath,
+          context: capture.context,
+          capturedAt: capture.capturedAt
+        });
+
+        console.log('✅ Notification window result:', result);
+
+        if (result && result.success) {
+          console.log('✅ Notification window shown successfully');
+          mainButton.classList.remove('capturing');
+          mainButton.classList.add('processing');
+        } else {
+          throw new Error(result?.error || 'Failed to show notification');
+        }
+        
+      } catch (error) {
+        console.error('❌ Failed to show notification:', error);
+        mainButton.classList.remove('capturing', 'processing');
+        mainIcon.textContent = '❌';
+        tooltip.textContent = 'Notification failed!';
+        setTimeout(() => {
+          mainIcon.textContent = '📸';
+          tooltip.classList.remove('show');
+          isCapturing = false;
+        }, 2000);
+      }
+    }
+
+    async function sendToBackend() {
+      if (!pendingCapture) return;
+      clearTimeout(autoSendTimer);
+      tooltip.textContent = 'Sending...';
+      const res = await window.electronAPI.sendCaptureToBackend({
+        screenshotPath: pendingCapture.screenshotPath,
+        context: pendingCapture.context
+      });
+      if (res.success) {
+        tooltip.textContent = 'Saved ✅';
+      } else {
+        tooltip.textContent = 'Failed ❌';
+      }
+      setTimeout(() => {
+        tooltip.classList.remove('show');
+        pendingCapture = null;
+      }, 2000);
+    }
+
+    function handleTextNote() {
+      console.log('📝 Text note - Coming soon!');
+      showTemporaryMessage('Text note - Coming soon!');
+    }
+
+    function handleAudioNote() {
+      console.log('🎤 Audio note - Coming soon!');
+      showTemporaryMessage('Audio recording - Coming soon!');
+    }
+
+    function handleFileAttach() {
+      console.log('📎 File attach - Coming soon!');
+      showTemporaryMessage('File attachment - Coming soon!');
+    }
+
+    function showTemporaryMessage(message) {
+      tooltip.textContent = message;
+      tooltip.classList.add('show');
+      setTimeout(() => {
+        tooltip.classList.remove('show');
+      }, 2500);
+    }
+
+    mainButton.addEventListener('mouseenter', () => {
+      if (!isCapturing && !menuContainer.classList.contains('show')) {
+        tooltip.textContent = 'Click to capture · Double-click for options';
+        tooltip.classList.add('show');
+      }
+    });
+
+    mainButton.addEventListener('mouseleave', () => {
+      if (!isCapturing) {
+        tooltip.classList.remove('show');
+      }
+    });
+
+    if (window.electronAPI && window.electronAPI.onCaptureShortcut) {
+      window.electronAPI.onCaptureShortcut(() => {
+        console.log('⌨️ Keyboard shortcut triggered');
+        handleSingleClick();
+      });
+    }
+
+    console.log('✅ Floating capture button initialized');
+    console.log('💡 Single click = Capture | Double click = Menu | Hover × = Close');
+  </script>
+</body>
+
+</html>
