@@ -4,7 +4,7 @@ const url = require('url');
 
 // OAuth Configuration
 const GOOGLE_OAUTH_URL = 'https://accounts.google.com/o/oauth2/v2/auth';
-const REDIRECT_URI = 'http://localhost:8080/auth/callback';
+const REDIRECT_URI = 'http://localhost:3001/auth/callback';
 
 // TODO: Replace with your actual Google OAuth Client ID from GCP Console
 const CLIENT_ID = process.env.GOOGLE_CLIENT_ID || '1056690364460-apvbfvf53jk5m7i4p8hc0rbrn05np80e.apps.googleusercontent.com';
@@ -74,9 +74,9 @@ async function startOAuthFlow() {
       }
     });
 
-    // Start server on port 8080
-    server.listen(8080, () => {
-      console.log('🔐 OAuth callback server listening on port 8080');
+    // Start server on port 3001
+    server.listen(3001, () => {
+      console.log('🔐 OAuth callback server listening on port 3001');
       
       // Open system browser with OAuth URL
       require('electron').shell.openExternal(authUrl);

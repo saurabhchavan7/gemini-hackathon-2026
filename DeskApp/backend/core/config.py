@@ -8,7 +8,7 @@ from dotenv import load_dotenv
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 # Get the absolute path to the .env file
-env_path = Path(__file__).resolve().parent.parent.parent / ".env"
+env_path = Path(__file__).resolve().parent.parent / ".env"
 load_dotenv(dotenv_path=env_path)
 
 class Settings(BaseSettings):
@@ -33,13 +33,13 @@ class Settings(BaseSettings):
     COLLECTION_NOTES: str = "notes"
 
     # API Keys & Secrets
-    GOOGLE_API_KEY: str = os.getenv("GEMINI_API_KEY", "")
+    GOOGLE_API_KEY: str = os.getenv("GOOGLE_API_KEY", "")
     JWT_SECRET: str = os.getenv("JWT_SECRET", "your-fallback-secret-here")
     
     # Google OAuth Settings (For Desktop App Login)
     GOOGLE_CLIENT_ID: str = os.getenv("GOOGLE_CLIENT_ID", "")
     GOOGLE_CLIENT_SECRET: str = os.getenv("GOOGLE_CLIENT_SECRET", "")
-    GOOGLE_REDIRECT_URI: str = os.getenv("GOOGLE_REDIRECT_URI", "http://localhost:8080/auth/callback")
+    GOOGLE_REDIRECT_URI: str = os.getenv("GOOGLE_REDIRECT_URI", "http://localhost:3001/auth/callback")
     
     # Google OAuth Settings (For API Access)
     GOOGLE_CREDENTIALS_FILE: str = "google_credentials.json"

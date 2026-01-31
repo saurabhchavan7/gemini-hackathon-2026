@@ -105,7 +105,7 @@ class GoogleAuthService:
         flow = Flow.from_client_secrets_file(
             self.credentials_file,
             scopes=SCOPES,
-            redirect_uri='http://localhost:8080/auth/google/callback'
+            redirect_uri='http://localhost:3001/auth/google/callback'
         )
         
         authorization_url, state = flow.authorization_url(

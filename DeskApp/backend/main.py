@@ -180,8 +180,11 @@ async def ws_transcribe(websocket: WebSocket, token: str = Query(default="")):
     await websocket.accept()
     
     from google import genai
-    
-    client = genai.Client()
+    from core.config import settings
+
+
+    client = genai.Client(api_key=settings.GOOGLE_API_KEY)
+ 
     MODEL = "gemini-2.5-flash-native-audio-preview-12-2025"
     CONFIG = {
         "response_modalities": ["TEXT"],
