@@ -216,3 +216,47 @@ marimo/_lsp/
 __marimo__/
 
 *.json
+
+# ----------------------------------------------
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+.venv/
+ENV/
+
+# Google Credentials - CRITICAL!
+google_credentials.json
+tokens/
+*.pickle
+
+# Environment variables
+.env
+
+# Database
+*.db
+*.sqlite3
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Test files
+test_*.py
+captures/
+
+cleanup.bat
+remove_emojis.py

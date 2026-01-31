@@ -33,12 +33,18 @@ if (!fs.existsSync(audioDir)) {
 let audioPath = null;
 
 ipcMain.on('notification-send-capture', async (event, payload) => {
-  console.log('📥 Capture received from notification');
+  console.log('🔥 Capture received from notification');
 
   let audioPath = null;
   const transcript = payload.audioTranscript || null;
 
   try {
+    // ✅ ENSURE CONTEXT HAS TIMEZONE
+    if (!payload.context.timezone) {
+      payload.context.timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+      console.log('🌍 Added timezone to context:', payload.context.timezone);
+    }
+    
     // ✅ SAVE AUDIO FIRST
     if (payload.audioBuffer) {
       const audioFilename = `audio_${Date.now()}.webm`;
@@ -188,15 +194,24 @@ async function createMainWindow() {
     }
   });
 
-  // Load your Next.js app
-  //const startUrl = process.env.ELECTRON_START_URL || 'http://localhost:3000';
   const isAuthenticated = await TokenManager.isAuthenticated();
 
   const startUrl = isAuthenticated
     ? 'http://localhost:3000/inbox'
     : 'http://localhost:3000/login';
 
-  mainWindow.loadURL(startUrl);
+  await mainWindow.loadURL(startUrl);
+
+  // ⭐ ADD THIS: Inject token into web page after load
+  if (isAuthenticated) {
+    const token = await TokenManager.getToken();
+    if (token) {
+      mainWindow.webContents.executeJavaScript(`
+        localStorage.setItem('token', '${token}');
+        console.log('Token injected into localStorage');
+      `);
+    }
+  }
 
   // Open DevTools in development
   if (process.env.NODE_ENV === 'development') {
@@ -297,11 +312,15 @@ function registerShortcuts() {
 
 // Get active window context using PowerShell (Windows)
 async function getActiveWindowContext() {
+  // Get user's timezone from system
+  const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+  
   const context = {
     appName: 'Unknown',
     windowTitle: 'Unknown',
     url: null,
-    timestamp: new Date().toISOString()
+    timestamp: new Date().toISOString(),
+    timezone: timezone  // ← ADD THIS LINE
   };
 
   if (process.platform !== 'win32') {
@@ -333,7 +352,6 @@ async function getActiveWindowContext() {
 
     if (isBrowser) {
       // For now, try to extract URL from window title (many browsers show it)
-      // Full URL capture via clipboard can be added later
       const urlMatch = context.windowTitle.match(/https?:\/\/[^\s]+/);
       if (urlMatch) {
         context.url = urlMatch[0];
@@ -395,52 +413,41 @@ async function getBrowserUrl(browserProcess) {
 }
 
 // Send capture to backend
-// Send capture to backend (PATHS ONLY)
-async function sendToBackend(screenshotPath, context, audioPath, textNote, audioTranscript) {
+async function sendToBackend(screenshotPath, context, audioPath, textNote) {
   try {
-    const FormData = (await import('form-data')).default;
-    const fetch = (await import('node-fetch')).default;
-
-    // Get JWT token
+    const FormData = require('form-data');
+    const axios = require('axios');
     const token = await TokenManager.getToken();
 
-    if (!token) {
-      console.warn('⚠️ No JWT token found, skipping backend upload');
-      return { success: false, error: 'Not authenticated' };
-    }
+    // 🔍 DEBUG: Log what we're sending
+    console.log('🌍 Context timezone:', context.timezone);
+    console.log('🌍 Detected timezone:', Intl.DateTimeFormat().resolvedOptions().timeZone);
+    
+    // Use detected timezone if context doesn't have it
+    const userTimezone = context.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone;
+    console.log('🌍 Using timezone:', userTimezone);
 
     const form = new FormData();
-
-    // ✅ REQUIRED — backend expects this
     form.append('screenshot_path', screenshotPath);
+    form.append('app_name', context.appName || 'Unknown');
+    form.append('window_title', context.windowTitle || 'Unknown');
+    form.append('url', context.url || '');
+    form.append('timestamp', context.timestamp);
+    form.append('timezone', userTimezone);  // ← CHANGED THIS LINE
 
-    // ✅ OPTIONAL metadata (keep as-is if backend uses them)
-    if (context?.appName) form.append('app_name', context.appName);
-    if (context?.windowTitle) form.append('window_title', context.windowTitle);
-    if (context?.url) form.append('url', context.url);
-    if (context?.timestamp) form.append('timestamp', context.timestamp);
-    if (textNote) form.append('text_note', textNote);
     if (audioPath) form.append('audio_path', audioPath);
-    if (audioTranscript) form.append('audio_transcript', audioTranscript);
+    if (textNote) form.append('text_note', textNote);
 
-
-    const headers = {
-      ...form.getHeaders(),
-      Authorization: `Bearer ${token}`
-    };
-
-    const response = await fetch(`${BACKEND_URL}/api/capture`, {
-      method: 'POST',
-      body: form,
-      headers
+    const response = await axios.post(`${BACKEND_URL}/api/capture`, form, {
+      headers: {
+        ...form.getHeaders(),
+        'Authorization': `Bearer ${token}`
+      }
     });
 
-    const result = await response.json();
-    console.log('✅ Backend response:', result);
-    return result;
-
+    return response.data;
   } catch (error) {
-    console.error('❌ Backend error:', error.message);
+    console.error('❌ Backend upload failed:', error.message);
     return { success: false, error: error.message };
   }
 }
@@ -595,13 +602,28 @@ ipcMain.handle('google-login', async (event) => {
     const authCode = await GoogleAuth.startOAuthFlow();
     const { token, user } = await CloudRunClient.login(authCode);
 
-    // ADD THIS: Create the button upon successful login
+    console.log('✅ Login successful, injecting token...');
+
+    // Inject token into renderer localStorage
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      await mainWindow.webContents.executeJavaScript(`
+        localStorage.setItem('token', '${token}');
+        console.log('✅ Token saved to localStorage');
+      `);
+      
+      // Redirect to inbox
+      await mainWindow.loadURL('http://localhost:3000/inbox');
+      console.log('✅ Redirected to inbox');
+    }
+
+    // Create floating button
     if (!floatingButton || floatingButton.isDestroyed()) {
       createFloatingButton();
     }
 
     return { success: true, user: user };
   } catch (error) {
+    console.error('❌ Login failed:', error);
     return { success: false, error: error.message };
   }
 });
