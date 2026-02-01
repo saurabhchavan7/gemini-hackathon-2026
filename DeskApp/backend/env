@@ -1,0 +1,22 @@
+# In backend/.env
+GOOGLE_CLOUD_PROJECT=your_project_id_here
+# GOOGLE_APPLICATION_CREDENTIALS=D:\workspace\git_projects\gemini-hackathon-2026\DeskApp\secrets\gcp-credentials.json
+
+# Google OAuth (get from GCP Console)
+GOOGLE_CLIENT_ID=1056690364460-apvbfvf53jk5m7i4p8hc0rbrn05np80e.apps.googleusercontent.com
+GOOGLE_CLIENT_SECRET=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
+GOOGLE_REDIRECT_URI=http://localhost:3001/auth/callback
+
+# JWT Secret (generate with: openssl rand -hex 32)
+JWT_SECRET=620e3238926792762539aa77a29c20fc9ce488b6472824d8889091af14ba6eee
+
+# Gemini API Key 
+GEMINI_API_KEY=AIzaSyATLXvg9r2i48B7OnVspgIPTpoJuDi3pvI
+
+# Database
+DATABASE_URL=sqlite:///./lifeos.db
+
+# Backend Settings
+PORT=3001
+DEBUG=True
+CORS_ORIGINS=*

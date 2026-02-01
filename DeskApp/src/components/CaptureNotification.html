@@ -13,127 +13,140 @@
         }
 
         body {
-            width: 420px;
-            height: 360px;
+            width: 450px;
+            height: auto;
             margin: 0;
-            padding: 0;
+            padding: 12px;
             background: transparent;
             overflow: hidden;
-            font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, 'Roboto', sans-serif;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', sans-serif;
         }
 
         .notification {
-            min-height: 320px;
-            width: 404px;
-            background: rgba(20, 20, 22, 0.92);
-            border: 1px solid rgba(255, 255, 255, 0.08);
-            border-radius: 14px;
-            box-shadow: 0 18px 50px rgba(0, 0, 0, 0.55), 0 2px 10px rgba(0, 0, 0, 0.25);
-            backdrop-filter: blur(14px);
-            padding: 14px;
+            width: 100%;
+            background: rgba(255, 255, 255, 0.85);
+            backdrop-filter: blur(40px) saturate(180%);
+            -webkit-backdrop-filter: blur(40px) saturate(180%);
+            border: 0.5px solid rgba(255, 255, 255, 0.18);
+            border-radius: 20px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12), 
+                        0 1px 3px rgba(0, 0, 0, 0.08);
+            padding: 18px;
             overflow: hidden;
-            animation: toastIn 260ms cubic-bezier(0.2, 0.8, 0.2, 1);
+            animation: toastIn 300ms cubic-bezier(0.34, 1.56, 0.64, 1);
         }
 
         @keyframes toastIn {
             from {
-                transform: translateY(18px);
+                transform: translateY(20px) scale(0.95);
                 opacity: 0;
             }
-
             to {
-                transform: translateY(0);
+                transform: translateY(0) scale(1);
                 opacity: 1;
             }
         }
 
         @keyframes toastOut {
             from {
-                transform: translateY(0);
+                transform: translateY(0) scale(1);
                 opacity: 1;
             }
-
             to {
-                transform: translateY(18px);
+                transform: translateY(20px) scale(0.95);
                 opacity: 0;
             }
         }
 
         .notification.closing {
-            animation: toastOut 180ms ease-in forwards;
+            animation: toastOut 200ms cubic-bezier(0.4, 0, 0.2, 1) forwards;
         }
 
         .header {
             display: flex;
             align-items: center;
-            gap: 8px;
+            justify-content: space-between;
+            gap: 12px;
             margin-bottom: 12px;
         }
 
         .header-icon {
-            font-size: 20px;
+            font-size: 18px;
+            line-height: 1;
         }
 
         .header-title {
             font-size: 14px;
             font-weight: 600;
-            color: rgba(255, 255, 255, 0.92);
-            flex: 1;
+            color: #1d1d1f;
+            letter-spacing: -0.3px;
         }
 
         .close-btn {
-            width: 24px;
-            height: 24px;
-            border-radius: 4px;
+            width: 28px;
+            height: 28px;
+            border-radius: 6px;
             border: none;
             background: transparent;
             cursor: pointer;
-            font-size: 16px;
-            color: rgba(255, 255, 255, 0.65);
+            font-size: 18px;
+            color: rgba(60, 60, 67, 0.6);
             display: flex;
             align-items: center;
             justify-content: center;
-            transition: background 0.2s;
+            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
         }
 
         .close-btn:hover {
-            background: rgba(255, 255, 255, 0.08);
+            background: rgba(120, 120, 128, 0.16);
+            color: rgba(60, 60, 67, 0.9);
+        }
+
+        .close-btn:active {
+            background: rgba(120, 120, 128, 0.24);
+            transform: scale(0.96);
         }
 
         .thumbnail {
             width: 100%;
-            height: 120px;
-            border-radius: 8px;
+            height: 140px;
+            border-radius: 14px;
             object-fit: cover;
-            background: rgba(255, 255, 255, 0.06);
-            margin-bottom: 12px;
+            background: rgba(120, 120, 128, 0.12);
+            margin-bottom: 14px;
+            border: 0.5px solid rgba(0, 0, 0, 0.04);
+            display: block;
         }
 
         .text-input {
             width: 100%;
-            padding: 8px 12px;
-            background: rgba(255, 255, 255, 0.06);
-            border: 1px solid rgba(255, 255, 255, 0.10);
-            border-radius: 6px;
-            color: rgba(255, 255, 255, 0.92);
-            font-size: 13px;
-            font-family: inherit;
+            padding: 11px 14px;
+            background: rgba(120, 120, 128, 0.12);
+            border: 0.5px solid rgba(0, 0, 0, 0.04);
+            border-radius: 10px;
+            color: #1d1d1f;
+            font-size: 14px;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
             resize: none;
             margin-bottom: 12px;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
         }
 
         .text-input:focus {
             outline: none;
-            border-color: rgba(26, 115, 232, 0.9);
+            border-color: rgba(0, 122, 255, 0.5);
+            background: rgba(0, 122, 255, 0.06);
+            box-shadow: 0 0 0 3px rgba(0, 122, 255, 0.08);
         }
 
         .text-input::placeholder {
-            color: rgba(255, 255, 255, 0.45);
+            color: rgba(60, 60, 67, 0.6);
         }
 
         .text-input:disabled {
-            opacity: 0.6;
+            opacity: 0.5;
             cursor: not-allowed;
+            background: rgba(120, 120, 128, 0.08);
         }
 
         .actions {
@@ -143,68 +156,269 @@
         }
 
         .record-btn {
-            flex: 1;
-            padding: 8px 12px;
-            background: rgba(255, 255, 255, 0.06);
-            border: 1px solid rgba(255, 255, 255, 0.10);
-            border-radius: 6px;
-            color: rgba(255, 255, 255, 0.86);
-            font-size: 13px;
+            width: 56px;
+            height: 56px;
+            padding: 0;
+            background: transparent;
+            border: none;
             cursor: pointer;
             display: flex;
             align-items: center;
             justify-content: center;
-            gap: 6px;
-            transition: all 0.2s;
+            transition: all 0.3s ease;
+            flex-shrink: 0;
+            position: relative;
         }
 
-        .record-btn:hover {
-            background: rgba(255, 255, 255, 0.10);
-            border-color: rgba(255, 255, 255, 0.16);
+        /* Outer circle - largest */
+        .record-btn::before {
+            content: '';
+            position: absolute;
+            width: 56px;
+            height: 56px;
+            border-radius: 50%;
+            background: rgba(0, 122, 255, 0.12);
+            transition: all 0.3s ease;
         }
 
-        .record-btn.recording {
-            background: rgba(251, 188, 4, 0.15);
-            border-color: #fbbc04;
-            color: #fbbc04;
+        /* Middle circle */
+        .record-btn::after {
+            content: '';
+            position: absolute;
+            width: 44px;
+            height: 44px;
+            border-radius: 50%;
+            background: rgba(0, 122, 255, 0.2);
+            transition: all 0.3s ease;
+        }
+
+        /* Inner circle with icon */
+        .record-btn-inner {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            background: rgba(0, 122, 255, 0.9);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 16px;
+            z-index: 1;
+            transition: all 0.3s ease;
+            box-shadow: 0 2px 8px rgba(0, 122, 255, 0.25);
+            position: relative;
+        }
+
+        /* Microphone icon using CSS */
+        .mic-icon {
+            width: 10px;
+            height: 14px;
+            background: white;
+            border-radius: 10px 10px 0 0;
+            position: relative;
+            margin-bottom: 3px;
+        }
+
+        .mic-icon::before {
+            content: '';
+            position: absolute;
+            bottom: -3px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 14px;
+            height: 8px;
+            border: 2px solid white;
+            border-top: none;
+            border-radius: 0 0 10px 10px;
+        }
+
+        .mic-icon::after {
+            content: '';
+            position: absolute;
+            bottom: -6px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 2px;
+            height: 4px;
+            background: white;
+        }
+
+        /* Sound wave bars */
+        .sound-waves {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 2px;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+
+        .wave-bar {
+            width: 2px;
+            background: white;
+            border-radius: 2px;
+            transition: all 0.1s ease;
+        }
+
+        .wave-bar:nth-child(1) { height: 6px; }
+        .wave-bar:nth-child(2) { height: 10px; }
+        .wave-bar:nth-child(3) { height: 14px; }
+        .wave-bar:nth-child(4) { height: 10px; }
+        .wave-bar:nth-child(5) { height: 6px; }
+
+        .record-btn:hover::before {
+            background: rgba(0, 122, 255, 0.16);
+            transform: scale(1.05);
+        }
+
+        .record-btn:hover::after {
+            background: rgba(0, 122, 255, 0.28);
+            transform: scale(1.05);
+        }
+
+        .record-btn:hover .record-btn-inner {
+            background: rgba(0, 122, 255, 1);
+            transform: scale(1.05);
+        }
+
+        .record-btn:active::before,
+        .record-btn:active::after,
+        .record-btn:active .record-btn-inner {
+            transform: scale(0.95);
+        }
+
+        /* Recording state - RED */
+        .record-btn.recording::before {
+            background: rgba(244, 67, 54, 0.15);
+            animation: pulseOuter 1.5s ease-in-out infinite;
+        }
+
+        .record-btn.recording::after {
+            background: rgba(244, 67, 54, 0.25);
+            animation: pulseMiddle 1.5s ease-in-out infinite;
+        }
+
+        .record-btn.recording .record-btn-inner {
+            background: #f44336;
+            box-shadow: 0 2px 8px rgba(244, 67, 54, 0.3);
+        }
+
+        .record-btn.recording .mic-icon {
+            opacity: 0;
+        }
+
+        .record-btn.recording .sound-waves {
+            opacity: 1;
+        }
+
+        .record-btn.recording .wave-bar {
+            animation: waveAnimation 0.8s ease-in-out infinite;
+        }
+
+        .record-btn.recording .wave-bar:nth-child(1) {
+            animation-delay: 0s;
+        }
+        .record-btn.recording .wave-bar:nth-child(2) {
+            animation-delay: 0.1s;
+        }
+        .record-btn.recording .wave-bar:nth-child(3) {
+            animation-delay: 0.2s;
+        }
+        .record-btn.recording .wave-bar:nth-child(4) {
+            animation-delay: 0.1s;
+        }
+        .record-btn.recording .wave-bar:nth-child(5) {
+            animation-delay: 0s;
+        }
+
+        @keyframes pulseOuter {
+            0%, 100% {
+                transform: scale(1);
+                opacity: 1;
+            }
+            50% {
+                transform: scale(1.1);
+                opacity: 0.8;
+            }
+        }
+
+        @keyframes pulseMiddle {
+            0%, 100% {
+                transform: scale(1);
+                opacity: 1;
+            }
+            50% {
+                transform: scale(1.08);
+                opacity: 0.9;
+            }
+        }
+
+        @keyframes waveAnimation {
+            0%, 100% {
+                height: 6px;
+            }
+            50% {
+                height: 16px;
+            }
         }
 
         .send-btn {
-            flex: 2;
-            padding: 8px 16px;
-            background: #1a73e8;
+            flex: 1;
+            padding: 10px 28px;
+            background: rgba(10, 132, 255, 0.9);
             border: none;
-            border-radius: 6px;
+            border-radius: 12px;
             color: white;
-            font-size: 13px;
-            font-weight: 500;
+            font-size: 16px;
+            font-weight: 400;
             cursor: pointer;
             display: flex;
             align-items: center;
             justify-content: center;
-            gap: 6px;
-            transition: all 0.2s;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+            letter-spacing: 0.5px;
+            font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', system-ui, sans-serif;
+            text-transform: none;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
         }
 
         .send-btn:hover {
-            background: #1765cc;
+            background: rgba(10, 132, 255, 1);
+            box-shadow: 0 2px 8px rgba(10, 132, 255, 0.25);
+            transform: translateY(-1px);
+        }
+
+        .send-btn:active {
+            background: rgba(0, 122, 255, 1);
+            transform: translateY(0);
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
         }
 
         .send-btn:disabled {
-            background: rgba(255, 255, 255, 0.16);
-            color: rgba(255, 255, 255, 0.55);
+            background: rgba(120, 120, 128, 0.16);
+            color: rgba(60, 60, 67, 0.3);
             cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
         }
 
         .timer {
             font-size: 12px;
-            color: rgba(255, 255, 255, 0.55);
+            color: rgba(60, 60, 67, 0.6);
             white-space: nowrap;
+            font-weight: 500;
         }
 
         .countdown {
-            color: #1a73e8;
-            font-weight: 600;
+            color: rgba(0, 122, 255, 1);
+            font-weight: 700;
         }
     </style>
 </head>
@@ -223,14 +437,19 @@
 
         <div class="actions">
             <button class="record-btn" id="recordBtn">
-                <span id="recordIcon">🎤</span>
-                <span id="recordText">Record</span>
+                <div class="record-btn-inner">
+                    <div class="mic-icon"></div>
+                    <div class="sound-waves">
+                        <div class="wave-bar"></div>
+                        <div class="wave-bar"></div>
+                        <div class="wave-bar"></div>
+                        <div class="wave-bar"></div>
+                        <div class="wave-bar"></div>
+                    </div>
+                </div>
             </button>
 
-            <button class="send-btn" id="sendBtn">
-                <span>📤</span>
-                <span>Send</span>
-            </button>
+            <button class="send-btn" id="sendBtn">Send</button>
 
             <div class="timer">
                 <span class="countdown" id="countdown">10</span>s
@@ -267,8 +486,6 @@
         const closeBtn = document.getElementById('closeBtn');
         const thumbnail = document.getElementById('thumbnail');
         const countdown = document.getElementById('countdown');
-        const recordIcon = document.getElementById('recordIcon');
-        const recordText = document.getElementById('recordText');
 
         if (!window.electronAPI) {
             console.error('❌ electronAPI not available');
@@ -313,6 +530,18 @@
             startAutoSendTimer();
         });
 
+        // Listen for send failure
+        if (window.electronAPI.onCaptureSentFailed) {
+            window.electronAPI.onCaptureSentFailed(function () {
+                console.error('❌ Send failed');
+                sendBtn.disabled = false;
+                sendBtn.textContent = 'Failed - Retry?';
+                setTimeout(() => {
+                    sendBtn.textContent = 'Send';
+                }, 3000);
+            });
+        }
+
         // ---------------------------
         // Functions
         // ---------------------------
@@ -354,7 +583,7 @@
         }
 
         // ---------------------------
-        // Recording controls (simplified - no WebSocket)
+        // Recording controls
         // ---------------------------
         
         async function startRecording() {
@@ -403,8 +632,6 @@
 
                 // Update button appearance
                 recordBtn.classList.add("recording");
-                recordIcon.textContent = "⏹";
-                recordText.textContent = "Stop";
 
                 console.log("✅ Recording started");
 
@@ -438,8 +665,6 @@
 
             // Update button appearance
             recordBtn.classList.remove("recording");
-            recordIcon.textContent = "✓";
-            recordText.textContent = "Recorded";
 
             console.log("✅ Recording stopped");
         }
@@ -474,7 +699,7 @@
 
             // Update UI
             sendBtn.disabled = true;
-            sendBtn.innerHTML = '<span>⏳</span><span>Sending...</span>';
+            sendBtn.textContent = 'Sending...';
             
             // Close after short delay
             setTimeout(closeWithAnimation, 400);
