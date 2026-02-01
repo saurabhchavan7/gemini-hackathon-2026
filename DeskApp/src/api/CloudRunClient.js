@@ -19,9 +19,9 @@ const axios = require('axios');
 const TokenManager = require('../auth/TokenManager');
 
 // Backend URL - change this when backend is deployed to Cloud Run
-// For local development: http://localhost:8000
+// For local development: http://localhost:3001
 // For production: https://lifeos-backend-xxxxx.run.app
-const BASE_URL = process.env.BACKEND_URL || 'http://localhost:8000';
+const BASE_URL = process.env.BACKEND_URL || 'http://localhost:3001';
 
 /**
  * Create axios instance with base configuration

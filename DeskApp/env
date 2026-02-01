@@ -17,6 +17,6 @@ GEMINI_API_KEY=AIzaSyATLXvg9r2i48B7OnVspgIPTpoJuDi3pvI
 DATABASE_URL=sqlite:///./lifeos.db
 
 # Backend Settings
-PORT=8000
+PORT=3001
 DEBUG=True
 CORS_ORIGINS=*

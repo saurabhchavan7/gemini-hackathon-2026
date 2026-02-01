@@ -13,7 +13,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   captureScreenshot: () => ipcRenderer.invoke('capture-screenshot'),
   
   showCaptureNotification: (data) =>
-  ipcRenderer.send('show-capture-notification', data),
+    ipcRenderer.invoke('show-capture-notification', data),
 
 
   sendCaptureToBackend: (payload) =>
@@ -27,6 +27,12 @@ contextBridge.exposeInMainWorld('electronAPI', {
 
   onCaptureSentSuccess: (cb) =>
     ipcRenderer.on('capture-sent-success', cb),
+
+  onCaptureSentFailed: (cb) =>
+    ipcRenderer.on('capture-sent-failed', cb),
+
+  onCaptureNotificationClosed: (cb) =>
+    ipcRenderer.on('capture-notification-closed', cb),
 
   onCaptureData: (callback) =>
     ipcRenderer.on('capture-data', (_, data) => callback(data)),

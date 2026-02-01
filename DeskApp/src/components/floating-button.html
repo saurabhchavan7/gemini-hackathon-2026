@@ -18,6 +18,8 @@
       background: transparent;
       overflow: hidden;
       font-family: 'Google Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
+      width: 280px;
+      height: 280px;
     }
 
     .button-wrapper {
@@ -29,6 +31,7 @@
       justify-content: center;
       width: 110px;
       height: 110px;
+      margin: 20px auto 0;
     }
 
     /* Outer draggable ring - Solid, colored, FULLY DRAGGABLE */
@@ -37,24 +40,25 @@
       width: 104px;
       height: 104px;
       border-radius: 50%;
-      border: 4px solid rgba(26, 115, 232, 0.3);
-      background: transparent;
+      border: 4px solid rgba(26, 115, 232, 0.5);
+      background: rgba(26, 115, 232, 0.02);
       transition: all 0.3s ease;
       z-index: 1;
       -webkit-app-region: drag;
       cursor: move;
+      pointer-events: auto;
     }
 
     .button-wrapper:hover .drag-ring {
-      border-color: rgba(26, 115, 232, 0.6);
+      border-color: rgba(26, 115, 232, 0.8);
       border-width: 5px;
-      background: rgba(26, 115, 232, 0.05);
+      background: rgba(26, 115, 232, 0.08);
     }
 
     .button-wrapper.dragging .drag-ring {
       border-color: #1a73e8;
       border-width: 6px;
-      background: rgba(26, 115, 232, 0.1);
+      background: rgba(26, 115, 232, 0.15);
     }
 
     .main-button {
@@ -90,6 +94,10 @@
 
     .main-button.processing {
       background: #fbbc04;
+    }
+
+    .main-button.error {
+      background: #ea4335;
     }
 
     .main-icon {
@@ -131,79 +139,77 @@
 
     .menu-container {
       position: absolute;
-      top: 50%;
-      transform: translateY(-50%);
+      top: 100%;
+      left: 50%;
+      transform: translateX(-50%) translateY(16px);
       opacity: 0;
       pointer-events: none;
       transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
       -webkit-app-region: no-drag;
       z-index: 100;
-    }
-
-    .menu-container {
-      left: 70px;
-      transform: translateY(-50%) translateX(-20px);
-    }
-
-    .menu-container.left-side {
-      left: auto;
-      right: 70px;
-      transform: translateY(-50%) translateX(20px);
+      margin-top: 8px;
+      padding: 0 10px;
     }
 
     .menu-container.show {
       opacity: 1;
       pointer-events: all;
-    }
-
-    .menu-container.show {
-      transform: translateY(-50%) translateX(0);
-    }
-
-    .menu-container.show.left-side {
-      transform: translateY(-50%) translateX(0);
+      transform: translateX(-50%) translateY(0);
     }
 
     .menu-options {
       display: flex;
       flex-direction: row;
-      gap: 8px;
+      gap: 12px;
       align-items: center;
+      justify-content: center;
     }
 
     .menu-item {
-      width: 48px;
-      height: 48px;
-      border-radius: 50%;
+      width: 50px;
+      height: 50px;
+      padding: 0;
       display: flex;
       align-items: center;
       justify-content: center;
       cursor: pointer;
       transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
       background: white;
-      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15), 0 4px 16px rgba(0, 0, 0, 0.12);
-      font-size: 24px;
+      border: none;
+      border-radius: 50%;
+      text-align: center;
+      font-size: 22px;
+      color: #202124;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12), 0 4px 12px rgba(0, 0, 0, 0.08);
+      line-height: 1;
+      overflow: visible;
     }
 
     .menu-item:hover {
-      transform: scale(1.1);
-      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2), 0 8px 24px rgba(0, 0, 0, 0.15);
+      transform: scale(1.15);
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15), 0 8px 20px rgba(0, 0, 0, 0.12);
     }
 
     .menu-item:active {
       transform: scale(0.95);
     }
 
-    .menu-item.text {
-      background: #e8f0fe;
+    .menu-item::before {
+      font-size: 26px;
+      line-height: 1;
+      letter-spacing: 0;
     }
 
-    .menu-item.audio {
-      background: #fce8e6;
+    .menu-item.text::before {
+      content: '📝';
     }
 
-    .menu-item.file {
-      background: #e6f4ea;
+    .menu-item.audio::before {
+      content: '🎤';
+    }
+
+    .menu-item.file::before {
+      content: '📎';
     }
 
     .tooltip {
@@ -278,9 +284,9 @@
     </div>
     <div class="menu-container" id="menuContainer">
       <div class="menu-options">
-        <div class="menu-item text" data-action="text" title="Text Note">📝</div>
-        <div class="menu-item audio" data-action="audio" title="Audio Note">🎤</div>
-        <div class="menu-item file" data-action="file" title="Attach File">📎</div>
+        <div class="menu-item text" data-action="text" title="Text Note"></div>
+        <div class="menu-item audio" data-action="audio" title="Audio Note"></div>
+        <div class="menu-item file" data-action="file" title="Attach File"></div>
       </div>
     </div>
     <div class="backdrop" id="backdrop"></div>
@@ -305,18 +311,6 @@
     let pendingCapture = null;
     let autoSendTimer = null;
 
-    function updateMenuPosition() {
-      if (!window.electronAPI) return;
-      const bounds = window.screen;
-      const buttonX = window.screenX;
-      const screenWidth = bounds.availWidth;
-      if (buttonX > screenWidth / 2) {
-        menuContainer.classList.add('left-side');
-      } else {
-        menuContainer.classList.remove('left-side');
-      }
-    }
-
     window.electronAPI.onCaptureSentSuccess(() => {
       tooltip.textContent = 'Saved ✅';
       tooltip.classList.add('show');
@@ -328,6 +322,28 @@
       }, 2000);
     });
 
+    window.electronAPI.onCaptureSentFailed((error) => {
+      console.error('❌ Capture send failed:', error);
+      tooltip.textContent = 'Failed ❌';
+      tooltip.classList.add('show');
+      isCapturing = false;
+      pendingCapture = null;
+      mainButton.classList.remove('processing', 'capturing');
+      mainButton.classList.add('error');
+      setTimeout(() => {
+        tooltip.classList.remove('show');
+        mainButton.classList.remove('error');
+      }, 2000);
+    });
+
+    window.electronAPI.onCaptureNotificationClosed?.(() => {
+      console.log('🔔 Notification closed, resetting button state');
+      isCapturing = false;
+      pendingCapture = null;
+      mainButton.classList.remove('processing', 'capturing', 'error');
+      tooltip.classList.remove('show');
+    });
+
     let dragTimeout;
     window.addEventListener('mousemove', () => {
       if (!isDragging) {
@@ -337,14 +353,18 @@
         dragTimeout = setTimeout(() => {
           isDragging = false;
           buttonWrapper.classList.remove('dragging');
-          updateMenuPosition();
         }, 500);
       }
     });
 
     document.addEventListener('click', (e) => {
       if (menuContainer.classList.contains('show')) {
-        if (!menuContainer.contains(e.target) && !mainButton.contains(e.target)) {
+        // Only close if clicking is NOT on menu items or main button
+        const clickedMenuItem = e.target.closest('.menu-item');
+        const clickedButton = e.target.closest('.main-button');
+        
+        // Close menu only if click is outside both
+        if (!clickedMenuItem && !clickedButton) {
           closeMenu();
         }
       }
@@ -386,7 +406,6 @@
     }
 
     function openMenu() {
-      updateMenuPosition();
       menuContainer.classList.add('show');
       backdrop.classList.add('show');
       tooltip.classList.remove('show');

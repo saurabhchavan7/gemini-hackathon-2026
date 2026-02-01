@@ -208,16 +208,8 @@ async def ws_transcribe(websocket: WebSocket, token: str = Query(default="")):
     await websocket.accept()
     
     from google import genai
-<<<<<<< HEAD
-    from core.config import settings
-
-
-    client = genai.Client(api_key=settings.GOOGLE_API_KEY)
- 
-=======
     
     client = genai.Client(api_key=settings.GOOGLE_API_KEY)
->>>>>>> 584e64b3f90c8205984cc59209a707f6d9fd8d7c
     MODEL = "gemini-2.5-flash-native-audio-preview-12-2025"
     CONFIG = {
         "response_modalities": ["TEXT"],
@@ -2270,5 +2262,5 @@ if __name__ == "__main__":
     print("[STARTUP] LifeOS Multi-Agent System v2.0")
     print("[STARTUP] 3-Layer Universal Classification System")
     print("[STARTUP] Domains: 12 | Context Types: 19 | Intents: 14")
-    print("[STARTUP] API running at http://localhost:8000")
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    print("[STARTUP] API running at http://localhost:3001")
+    uvicorn.run(app, host="0.0.0.0", port=3001)

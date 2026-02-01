@@ -75,10 +75,14 @@ ipcMain.on('notification-send-capture', async (event, payload) => {
     }
 
   } catch (err) {
-    console.error('❌ Failed to send capture:', err);
+    console.error('❌ Failed to send capture:', err.message || err);
+    console.error('❌ Full error:', err);
 
+    // notify floating button of failure
     if (floatingButton && !floatingButton.isDestroyed()) {
-      floatingButton.webContents.send('capture-sent-failed');
+      floatingButton.webContents.send('capture-sent-failed', {
+        error: err.message || 'Unknown error'
+      });
     }
   }
 
@@ -90,7 +94,7 @@ ipcMain.on('notification-send-capture', async (event, payload) => {
 
 
 
-ipcMain.on('show-capture-notification', (event, data) => {
+ipcMain.handle('show-capture-notification', async (event, data) => {
   console.log('🔔 Creating capture notification window...');
 
   // Close any existing notification safely
@@ -99,61 +103,73 @@ ipcMain.on('show-capture-notification', (event, data) => {
   }
   notificationWindow = null;
 
-  notificationWindow = new BrowserWindow({
-    width: 420,
-    height: 360,
-    frame: false,
-    transparent: true,
-    alwaysOnTop: true,
-    resizable: false,
-    skipTaskbar: true,
-    show: false,
-    webPreferences: {
-      preload: path.join(__dirname, 'preload.js'),
-      contextIsolation: true,
-      nodeIntegration: false,
-      devTools: true
-      // IMPORTANT: do NOT add sandbox:true
-    }
-  });
+  try {
+    notificationWindow = new BrowserWindow({
+      width: 420,
+      height: 360,
+      frame: false,
+      transparent: true,
+      alwaysOnTop: true,
+      resizable: false,
+      skipTaskbar: true,
+      show: false,
+      webPreferences: {
+        preload: path.join(__dirname, 'preload.js'),
+        contextIsolation: true,
+        nodeIntegration: false,
+        devTools: true
+        // IMPORTANT: do NOT add sandbox:true
+      }
+    });
 
-  // Bottom-right like Teams
-  const display = screen.getPrimaryDisplay();
-  const { x, y, width, height } = display.workArea;
-  const margin = 16;
-  notificationWindow.setPosition(
-    x + width - 420 - margin,
-    y + height - 360 - margin
-  );
+    // Bottom-right like Teams
+    const display = screen.getPrimaryDisplay();
+    const { x, y, width, height } = display.workArea;
+    const margin = 16;
+    notificationWindow.setPosition(
+      x + width - 420 - margin,
+      y + height - 360 - margin
+    );
 
-  const notificationPath = path.join(__dirname, 'src', 'components', 'CaptureNotification.html');
-  console.log('📄 Loading notification from:', notificationPath);
+    const notificationPath = path.join(__dirname, 'src', 'components', 'CaptureNotification.html');
+    console.log('📄 Loading notification from:', notificationPath);
 
-  // If load fails, log it clearly
-  notificationWindow.webContents.on('did-fail-load', (e, code, desc) => {
-    console.error('❌ Notification did-fail-load:', code, desc);
-  });
+    // If load fails, log it clearly
+    notificationWindow.webContents.on('did-fail-load', (e, code, desc) => {
+      console.error('❌ Notification did-fail-load:', code, desc);
+    });
 
-  // If renderer throws JS errors, surface them
-  notificationWindow.webContents.on('console-message', (e, level, message) => {
-    console.log('🧩 Notification console:', message);
-  });
+    // If renderer throws JS errors, surface them
+    notificationWindow.webContents.on('console-message', (e, level, message) => {
+      console.log('🧩 Notification console:', message);
+    });
 
-  notificationWindow.loadFile(notificationPath).then(() => {
-    // This always runs once loadFile finishes
+    await notificationWindow.loadFile(notificationPath);
+    
+    // Send capture data to notification
     notificationWindow.webContents.send('capture-data', data);
     notificationWindow.show(); // doesn't steal focus
     console.log('✅ Notification window shown');
-  }).catch((err) => {
-    console.error('❌ Failed to load notification file:', err);
-    if (notificationWindow && !notificationWindow.isDestroyed()) {
-      notificationWindow.webContents.openDevTools();
-    }
-  });
 
-  notificationWindow.on('closed', () => {
-    notificationWindow = null;
-  });
+    notificationWindow.on('closed', () => {
+      console.log('🔔 Notification window closed, resetting floating button state');
+      // Reset floating button state when notification closes
+      if (floatingButton && !floatingButton.isDestroyed()) {
+        floatingButton.webContents.send('capture-notification-closed');
+      }
+      notificationWindow = null;
+    });
+
+    return { success: true, message: 'Notification window created' };
+
+  } catch (err) {
+    console.error('❌ Failed to show notification:', err);
+    if (notificationWindow && !notificationWindow.isDestroyed()) {
+      notificationWindow.close();
+      notificationWindow = null;
+    }
+    throw err;
+  }
 });
 
 
@@ -174,7 +190,7 @@ let mainWindow = null;
 let floatingButton = null;
 
 // Backend URL - adjust as needed
-const BACKEND_URL = process.env.BACKEND_URL || 'http://localhost:8000';
+const BACKEND_URL = process.env.BACKEND_URL || 'http://localhost:3001';
 
 // Ensure captures directory exists
 const capturesDir = path.join(__dirname, 'captures', 'screenshots');
@@ -237,8 +253,8 @@ function createFloatingButton() {
   const y = Math.min(savedPosition.y, height - 90);
 
   floatingButton = new BrowserWindow({
-    width: 400,  // ← Wider to fit horizontal menu
-    height: 160,// ← Changed from 90 (to fit menu)
+    width: 280,  // ← Reduced from 600 to fit just the menu
+    height: 280,
     x: x,
     y: y,
     frame: false,
@@ -413,7 +429,7 @@ async function getBrowserUrl(browserProcess) {
 }
 
 // Send capture to backend
-async function sendToBackend(screenshotPath, context, audioPath, textNote) {
+async function sendToBackend(screenshotPath, context, audioPath, textNote, transcript = null) {
   try {
     const FormData = require('form-data');
     const axios = require('axios');
@@ -437,6 +453,7 @@ async function sendToBackend(screenshotPath, context, audioPath, textNote) {
 
     if (audioPath) form.append('audio_path', audioPath);
     if (textNote) form.append('text_note', textNote);
+    if (transcript) form.append('audio_transcript', transcript);
 
     const response = await axios.post(`${BACKEND_URL}/api/capture`, form, {
       headers: {
@@ -448,7 +465,8 @@ async function sendToBackend(screenshotPath, context, audioPath, textNote) {
     return response.data;
   } catch (error) {
     console.error('❌ Backend upload failed:', error.message);
-    return { success: false, error: error.message };
+    console.error('❌ Error details:', error);
+    throw error;  // ← Changed: throw instead of returning error object
   }
 }
 
@@ -768,8 +786,12 @@ app.whenReady().then(async () => {
   // Create main window
   createMainWindow();
 
-  // Create floating button
-  // createFloatingButton();
+  // Check if user is already authenticated (auto-login)
+  const isAuthenticated = await TokenManager.isAuthenticated();
+  if (isAuthenticated) {
+    console.log('✅ User already authenticated, creating floating button...');
+    createFloatingButton();
+  }
 
   // Register keyboard shortcuts
   registerShortcuts();
