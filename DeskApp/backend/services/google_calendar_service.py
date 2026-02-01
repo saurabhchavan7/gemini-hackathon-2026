@@ -56,7 +56,8 @@ class GoogleCalendarService:
         location: Optional[str] = None,
         attendees: Optional[List[str]] = None,
         source_capture_id: Optional[str] = None,
-        user_timezone: str = "UTC"
+        user_timezone: str = "UTC",
+        send_invites: bool = False
     ) -> Dict:
         """Creates a calendar event in Google Calendar and saves to Firestore"""
         
@@ -99,11 +100,19 @@ class GoogleCalendarService:
             if attendees:
                 event_body['attendees'] = [{'email': email} for email in attendees]
             
+            # Determine if we should send email invites
+            send_updates = 'all' if (send_invites and attendees) else 'none'
+            
+            if attendees:
+                print(f"[CALENDAR] Adding {len(attendees)} attendees: {attendees}")
+                if send_invites:
+                    print(f"[CALENDAR] Will send email invites to attendees")
+            
             # Create event in Google Calendar
             created_event = service.events().insert(
                 calendarId='primary',
                 body=event_body,
-                sendUpdates='none'
+                sendUpdates=send_updates
             ).execute()
             
             google_event_id = created_event['id']
