@@ -78,10 +78,10 @@ class GoogleTasksService:
             
             print(f"[TASKS] Created task '{title}' in Google Tasks")
             
-            # Save to Firestore
+            # Save to Firestore with proper notes field
             task_data = {
                 "title": title,
-                "notes": notes,
+                "notes": notes if notes else "",  # Save notes (not None!)
                 "due_date": due_date,
                 "google_task_id": google_task_id,
                 "google_tasklist_id": tasklist_id,
@@ -92,10 +92,13 @@ class GoogleTasksService:
                 "created_at": datetime.utcnow().isoformat()
             }
             
+            # DEBUG: Show what we're saving
+            print(f"[FIRESTORE] Saving task with notes: '{notes[:100] if notes else '(empty)'}'")
+            
             doc_ref = self.db._get_user_ref(self.user_id).collection("google_tasks").document()
             doc_ref.set(task_data)
             
-            print(f"[FIRESTORE] Saved task reference")
+            print(f"[FIRESTORE] Saved task reference to document: {doc_ref.id}")
             
             return {
                 "status": "success",
