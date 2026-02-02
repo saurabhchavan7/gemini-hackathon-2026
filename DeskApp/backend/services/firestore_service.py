@@ -1,7 +1,3 @@
-"""
-LifeOS - Firestore Service (Expanded for 3-Layer Classification)
-Manages 12 domain-specific collections + Comprehensive Captures
-"""
 import os
 from datetime import datetime  # ADDED: Missing import
 from google.cloud import firestore
@@ -11,25 +7,55 @@ from models.memory import Memory
 from models.action import Action
 from typing import Optional, List
 
+"""
+LifeOS - Firestore Service (Expanded for 3-Layer Classification)
+Manages 12 domain-specific collections + Comprehensive Captures
+"""
 
-# Collection names for 12 life domains
 DOMAIN_COLLECTIONS = {
     "work_career": "work_items",
     "education_learning": "learning_items",
     "money_finance": "financial_items",
     "home_daily_life": "home_items",
-    "health_wellbeing": "health_items",
-    "family_relationships": "family_items",
-    "travel_movement": "travel_items",
-    "shopping_consumption": "shopping_lists",
-    "entertainment_leisure": "media_items",
-    "social_community": "social_items",
-    "admin_documents": "document_items",
-    "ideas_thoughts": "notes"
-}
-
+        "health_wellbeing": "health_items",
+        "family_relationships": "family_items",
+        "travel_movement": "travel_items",
+        "shopping_consumption": "shopping_lists",
+        "entertainment_leisure": "media_items",
+        "social_community": "social_items",
+        "admin_documents": "document_items",
+        "ideas_thoughts": "notes"
+    }
 
 class FirestoreService:
+    def __init__(self):
+        self.project_id = os.getenv("GCP_PROJECT_ID") or "gemini-hackathon-2026-484903"
+        try:
+            self.db = firestore.Client(project=self.project_id)
+            print(f"[FIRESTORE] Initialized for project: {self.project_id}")
+        except Exception as e:
+            print(f"[ERROR] Firestore initialization failed: {e}")
+            raise e
+
+    def _get_user_ref(self, user_id: str):
+        """Helper to get the root document for a user"""
+        return self.db.collection("users").document(user_id)
+
+    async def save_file_metadata(self, user_id: str, file_id: str, meta: dict) -> str:
+        """
+        Save document metadata (file_name, upload_date, title, summary, domain, etc.) in users/{user_id}/files/{file_id}.
+        Returns document id on success, None on failure.
+        """
+        try:
+            # Serialize any datetime objects
+            meta = self._serialize_datetimes(meta)
+            doc_ref = self._get_user_ref(user_id).collection('files').document(file_id)
+            doc_ref.set(meta)
+            print(f"[FIRESTORE] Saved file metadata: {doc_ref.id}")
+            return doc_ref.id
+        except Exception as e:
+            print(f"[ERROR] save_file_metadata failed: {e}")
+            return None
     def __init__(self):
         self.project_id = os.getenv("GCP_PROJECT_ID") or "gemini-hackathon-2026-484903"
         
@@ -720,6 +746,31 @@ class FirestoreService:
             return doc_ref.id
         except Exception as e:
             print(f"[ERROR] save_to_domain_collection failed: {e}")
+            return None
+
+    async def save_user_file(self, user_id: str, file_meta: dict) -> str:
+        """
+        Save uploaded file metadata for a user.
+
+        Stores metadata under users/{user_id}/files/{file_id}.
+        Expects file_meta to contain at least: name, gcs_path, size_bytes, file_type, uploaded_at (optional).
+        Returns the created document id on success, None on failure.
+        """
+        try:
+            # Ensure uploaded_at exists
+            if 'uploaded_at' not in file_meta:
+                file_meta['uploaded_at'] = datetime.utcnow().isoformat()
+
+            # Serialize any datetime objects
+            file_meta = self._serialize_datetimes(file_meta)
+
+            doc_ref = self._get_user_ref(user_id).collection('files').document()
+            doc_ref.set(file_meta)
+
+            print(f"[FIRESTORE] Saved user file metadata: {doc_ref.id}")
+            return doc_ref.id
+        except Exception as e:
+            print(f"[ERROR] save_user_file failed: {e}")
             return None
 
     # ============================================

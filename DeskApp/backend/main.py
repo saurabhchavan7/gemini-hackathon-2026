@@ -27,6 +27,7 @@ from agents.cognition.intent_agent import IntentAgent
 from agents.orchestrator.planning_agent import PlanningAgent
 from agents.research_agent import ResearchAgent
 from services.firestore_service import FirestoreService
+from services.storage_service import StorageService
 from models.capture import Capture, CaptureMetadata
 from models.memory import Memory
 from core.event_bus import bus
@@ -2256,6 +2257,131 @@ async def get_notes(
 # ============================================
 # STARTUP
 # ============================================
+
+
+# ============================================
+# FILE UPLOAD ENDPOINT
+# ============================================
+
+
+@app.post("/api/upload-file")
+async def upload_file(
+    file: UploadFile = File(...),
+    capture_id: Optional[str] = Form(None),
+    authorization: str = Header(None)
+):
+    """
+    Upload a PDF or DOCX file, store it in GCS, and save metadata to Firestore.
+    """
+    # Auth Check
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Unauthorized")
+
+    token = authorization.replace("Bearer ", "")
+    try:
+        payload = jwt_manager.verify_jwt_token(token)
+        user_id = payload["user_id"]
+    except Exception as e:
+        raise HTTPException(status_code=401, detail=f"Invalid token: {str(e)}")
+
+    # Basic validation
+    filename = file.filename
+    ext = os.path.splitext(filename)[1].lower()
+    if ext not in ('.pdf', '.docx'):
+        raise HTTPException(status_code=400, detail="Only .pdf and .docx files are allowed")
+
+    contents = await file.read()
+    size = len(contents)
+    MAX_BYTES = 50 * 1024 * 1024
+    if size > MAX_BYTES:
+        raise HTTPException(status_code=413, detail="File too large (max 50MB)")
+
+    # Upload to GCS
+    try:
+        storage = StorageService()
+        dest_path = f"users/{user_id}/files/{str(uuid.uuid4())}{ext}"
+        upload_result = storage.upload_file_bytes(contents, dest_path)
+    except Exception as e:
+        print(f"[UPLOAD] GCS upload failed: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to upload file: {str(e)}")
+
+    # Save basic metadata to Firestore (legacy, for compatibility)
+    db = FirestoreService()
+    file_meta = {
+        'name': filename,
+        'gcs_path': upload_result.get('path'),
+        'gcs_bucket': upload_result.get('bucket'),
+        'gcs_url': upload_result.get('public_url'),
+        'size_bytes': size,
+        'file_type': file.content_type,
+        'capture_id': capture_id,
+        'uploaded_at': datetime.utcnow().isoformat()
+    }
+    try:
+        file_doc_id = await db.save_user_file(user_id, file_meta)
+    except Exception as e:
+        print(f"[UPLOAD] Firestore save failed: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to save file metadata: {str(e)}")
+
+    # Parse and chunk file, generate title/summary/domain
+    import tempfile
+    from services.file_parser import FileParser
+    try:
+        with tempfile.NamedTemporaryFile(delete=False, suffix=ext) as tmp:
+            tmp.write(contents)
+            tmp_path = tmp.name
+        parsed = FileParser.parse_and_chunk(tmp_path)
+        # Clean up temp file
+        os.remove(tmp_path)
+    except Exception as e:
+        print(f"[UPLOAD] File parsing failed: {e}")
+        parsed = None
+
+    # Save enhanced metadata to Firestore
+    enhanced_meta = None
+    embedding_error = None
+    vector_error = None
+    if parsed:
+        try:
+            # Compose metadata for Firestore
+            enhanced_meta = {
+                'file_name': parsed['file_name'],
+                'upload_date': parsed['upload_date'],
+                'title': parsed['title'],
+                'summary': parsed['summary'],
+                'domain': parsed['domain'],
+                'chunks': parsed['chunks'],
+                'text': parsed['text'],
+                'gcs_path': upload_result.get('path'),
+                'gcs_bucket': upload_result.get('bucket'),
+                'gcs_url': upload_result.get('public_url'),
+                'size_bytes': size,
+                'file_type': file.content_type,
+                'capture_id': capture_id,
+                'uploaded_at': datetime.utcnow().isoformat()
+            }
+            # Save using new metadata method
+            await db.save_file_metadata(user_id, file_doc_id, enhanced_meta)
+            # --- Embedding and Vector Upload ---
+            try:
+                from services.embedding_service import EmbeddingService
+                chunks = parsed['chunks']
+                embedding_service = EmbeddingService()
+                embedding_error, vector_error = embedding_service.embed_and_upload(
+                    chunks, file_doc_id, parsed, upload_result, enhanced_meta
+                )
+            except Exception as e:
+                print(f"[UPLOAD] Embedding/Vector upload failed: {e}")
+        except Exception as e:
+            print(f"[UPLOAD] Enhanced Firestore save failed: {e}")
+
+    return {
+        "success": True,
+        "file_id": file_doc_id,
+        "meta": enhanced_meta if parsed else file_meta,
+        "embedding_error": embedding_error,
+        "vector_error": vector_error
+    }
 
 if __name__ == "__main__":
     import uvicorn

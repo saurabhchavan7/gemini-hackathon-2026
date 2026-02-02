@@ -16,7 +16,7 @@
 const GoogleAuth = require('./src/auth/GoogleAuth');
 const TokenManager = require('./src/auth/TokenManager');
 const CloudRunClient = require('./src/api/CloudRunClient');
-const { app, BrowserWindow, ipcMain, globalShortcut, desktopCapturer, screen, Notification } = require('electron');
+const { app, BrowserWindow, ipcMain, globalShortcut, desktopCapturer, screen, Notification, dialog } = require('electron');
 const path = require('path');
 const fs = require('fs');
 
@@ -773,9 +773,85 @@ ipcMain.handle('get-auth-token', async () => {
   }
 });
 
+// File Dialog Handler - Optimized for Speed - PDF and DOCX Only
+ipcMain.handle('open-file-dialog', async () => {
+  try {
+    const result = await dialog.showOpenDialog({
+      title: 'Select a file to attach (PDF or DOCX only)',
+      defaultPath: app.getPath('documents') || app.getPath('home'),
+      buttonLabel: 'Select',
+      properties: ['openFile'],
+      filters: [
+        { name: 'PDF & Word Documents (*.pdf, *.docx)', extensions: ['pdf', 'docx'] }
+      ]
+    });
+
+    if (result.canceled) {
+      return { success: false, filePath: null, message: 'File selection canceled' };
+    }
+
+    const filePath = result.filePaths[0];
+    const fileName = path.basename(filePath);
+    const fileExtension = path.extname(filePath).toLowerCase();
+
+    // Validate file type
+    if (!['.pdf', '.docx'].includes(fileExtension)) {
+      console.warn('⚠️ Invalid file type:', fileExtension);
+      return {
+        success: false,
+        filePath: null,
+        error: `Invalid file type: ${fileExtension}. Only .pdf and .docx files are allowed.`
+      };
+    }
+
+    const fileSize = fs.statSync(filePath).size;
+
+    // Check file size (limit to 50MB)
+    const maxSize = 50 * 1024 * 1024; // 50MB
+    if (fileSize > maxSize) {
+      console.warn('⚠️ File too large:', (fileSize / 1024 / 1024).toFixed(2), 'MB');
+      return {
+        success: false,
+        filePath: null,
+        error: `File too large. Maximum size is 50MB. Your file is ${(fileSize / 1024 / 1024).toFixed(2)}MB.`
+      };
+    }
+
+    console.log('✅ File selected:', fileName, `(${(fileSize / 1024 / 1024).toFixed(2)} MB)`);
+
+    return {
+      success: true,
+      filePath: filePath,
+      fileName: fileName,
+      fileSize: fileSize,
+      fileType: fileExtension.substring(1).toUpperCase(),
+      message: 'File selected successfully'
+    };
+  } catch (error) {
+    console.error('❌ File dialog error:', error);
+    return {
+      success: false,
+      filePath: null,
+      error: error.message
+    };
+  }
+});
 
 
 // App lifecycle - INITIALIZE STORE FIRST
+// IPC: Read file as buffer for renderer upload
+ipcMain.handle('read-file-buffer', async (event, filePath) => {
+  try {
+    const data = fs.readFileSync(filePath);
+    return data.buffer;
+  } catch (err) {
+    console.error('❌ Failed to read file buffer:', err);
+    return null;
+  }
+});
+
+// IPC: Get JWT token for renderer
+
 app.whenReady().then(async () => {
   console.log('🚀 LifeOS starting...');
 
