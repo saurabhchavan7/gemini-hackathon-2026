@@ -1,21 +1,15 @@
-# ---- Base image ----
 FROM python:3.11-slim
 
-# ---- Set working dir ----
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1
+
 WORKDIR /app
 
-# ---- Install system deps (if needed) ----
-RUN apt-get update && apt-get install -y gcc && rm -rf /var/lib/apt/lists/*
-
-# ---- Copy & install python deps ----
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# ---- Copy app code ----
 COPY . .
 
-# ---- Expose port ----
-EXPOSE 3001
+EXPOSE 8080
 
-# ---- Start server ----
 CMD ["python", "main.py"]
