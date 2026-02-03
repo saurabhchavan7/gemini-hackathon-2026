@@ -29,7 +29,9 @@ DOMAIN_COLLECTIONS = {
 
 class FirestoreService:
     def __init__(self):
-        self.project_id = os.getenv("GCP_PROJECT_ID") or "gemini-hackathon-2026-484903"
+        self.project_id = settings.PROJECT_ID or os.getenv("GCP_PROJECT_ID", "")
+        if not self.project_id:
+            raise ValueError("[FIRESTORE] Missing GCP_PROJECT_ID; set it in the environment.")
         try:
             self.db = firestore.Client(project=self.project_id)
             print(f"[FIRESTORE] Initialized for project: {self.project_id}")

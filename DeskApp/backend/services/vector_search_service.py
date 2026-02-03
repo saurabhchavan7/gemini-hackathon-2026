@@ -7,18 +7,19 @@ from vertexai.language_models import TextEmbeddingModel
 class VectorSearchService:
     
     def __init__(self):
-        self.project_id = "gemini-hackathon-2026-484903"
-        self.region = "us-central1"
-        self.index_endpoint_id = "8185021842885443584"
-        self.deployed_index_id = "lifeos_deployed_index"
+        self.project_id = settings.PROJECT_ID
+        self.region = settings.LOCATION
+        self.index_endpoint_id = settings.VERTEX_INDEX_ENDPOINT_ID
+        self.deployed_index_id = settings.VERTEX_DEPLOYED_INDEX_ID
+
+        if not self.project_id:
+            raise ValueError("[VECTOR_SEARCH] Missing GCP_PROJECT_ID; set it in the environment.")
+        if not self.index_endpoint_id or not self.deployed_index_id:
+            raise ValueError(
+                "[VECTOR_SEARCH] Missing Vertex index endpoint configuration; "
+                "set VERTEX_INDEX_ENDPOINT_ID and VERTEX_DEPLOYED_INDEX_ID."
+            )
         
-        aiplatform.init(project=self.project_id, location=self.region)
-        self.index_endpoint = aiplatform.MatchingEngineIndexEndpoint(
-            index_endpoint_name=self.index_endpoint_id
-        )
-        self.embedding_model = TextEmbeddingModel.from_pretrained("text-embedding-004")
-        
-        print(f"[VECTOR_SEARCH] Initialized - Endpoint: {self.index_endpoint_id}")
 
     def search(
         self,

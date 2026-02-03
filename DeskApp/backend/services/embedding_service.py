@@ -8,9 +8,14 @@ from datetime import datetime
 class EmbeddingService:
     
     def __init__(self):
-        self.project_id = "gemini-hackathon-2026-484903"
-        self.region = "us-central1"
-        self.index_name = f"projects/1056690364460/locations/{self.region}/indexes/7431407777114750976"
+        self.project_id = settings.PROJECT_ID
+        self.region = settings.LOCATION
+        self.index_name = settings.VERTEX_INDEX_NAME
+
+        if not self.project_id:
+            raise ValueError("[EMBEDDING_SERVICE] Missing GCP_PROJECT_ID; set it in the environment.")
+        if not self.index_name:
+            raise ValueError("[EMBEDDING_SERVICE] Missing VERTEX_INDEX_NAME; set it in the environment.")
         
         self.index_client = aiplatform_v1.IndexServiceClient(
             client_options={"api_endpoint": f"{self.region}-aiplatform.googleapis.com"}
