@@ -1,66 +1,140 @@
 import os
-from typing import List, Tuple
+from typing import List, Tuple, Optional
 from google.cloud import aiplatform
-from google.cloud.aiplatform import MatchingEngineIndex
+from google.cloud import aiplatform_v1
 from vertexai.language_models import TextEmbeddingModel
+from datetime import datetime
 
 class EmbeddingService:
+    
     def __init__(self):
-        self.project_id = os.getenv("VERTEX_PROJECT_ID", "gemini-hackathon-2026-484903")
-        self.region = os.getenv("VERTEX_REGION", "us-central1")
-        self.index_id = os.getenv("VERTEX_INDEX_ID", "2331855255303618560")
-        aiplatform.init(project=self.project_id, location=self.region)
+        self.project_id = "gemini-hackathon-2026-484903"
+        self.region = "us-central1"
+        self.index_name = f"projects/1056690364460/locations/{self.region}/indexes/7431407777114750976"
+        
+        self.index_client = aiplatform_v1.IndexServiceClient(
+            client_options={"api_endpoint": f"{self.region}-aiplatform.googleapis.com"}
+        )
+        
         self.embedding_model = TextEmbeddingModel.from_pretrained("text-embedding-004")
+        
+        print(f"[EMBEDDING_SERVICE] Initialized - Using v1 client")
 
     def get_embeddings(self, texts: List[str]) -> List[List[float]]:
-        response = self.embedding_model.get_embeddings(texts)
-        return [e.values for e in response]
+        embeddings = []
+        for i in range(0, len(texts), 5):
+            batch = texts[i:i + 5]
+            response = self.embedding_model.get_embeddings(batch)
+            embeddings.extend([e.values for e in response])
+        print(f"[EMBEDDING_SERVICE] Generated {len(embeddings)} embeddings")
+        return embeddings
 
-    def embed_and_upload(
+    def embed_and_upload_document(
         self,
         chunks: List[str],
         file_doc_id: str,
-        parsed: dict,
-        upload_result: dict,
-        enhanced_meta: dict,
-    ) -> Tuple[str | None, str | None]:
-        embedding_error = None
-        vector_error = None
+        user_id: str,
+        metadata: dict
+    ) -> Tuple[Optional[str], Optional[str]]:
+        
         try:
+            print(f"[EMBEDDING_SERVICE] Processing {len(chunks)} chunks...")
             embeddings = self.get_embeddings(chunks)
+            
+            print(f"[EMBEDDING_SERVICE] Creating datapoints...")
             datapoints = []
             for i, embedding in enumerate(embeddings):
-                datapoints.append({
-                    "datapoint_id": f"{file_doc_id}_chunk_{i}",
-                    "feature_vector": embedding,
-                    "crowding_tag": file_doc_id
-                })
-            try:
-                index = MatchingEngineIndex(index_name=self.index_id)
-                index.upsert_datapoints(datapoints)
-                print(f"[VECTOR] Uploaded {len(datapoints)} vectors to index {self.index_id}")
-            except Exception as ve:
-                vector_error = str(ve)
-                print(f"[VECTOR] Upload error: {vector_error}")
-        except Exception as ee:
-            embedding_error = str(ee)
-            print(f"[EMBEDDING] Error: {embedding_error}")
-        return embedding_error, vector_error
+                datapoint = aiplatform_v1.IndexDatapoint(
+                    datapoint_id=f"{file_doc_id}_chunk_{i}",
+                    feature_vector=embedding,
+                    restricts=[
+                        aiplatform_v1.IndexDatapoint.Restriction(
+                            namespace="user_id",
+                            allow_list=[user_id]
+                        ),
+                        aiplatform_v1.IndexDatapoint.Restriction(
+                            namespace="type",
+                            allow_list=["document"]
+                        ),
+                        aiplatform_v1.IndexDatapoint.Restriction(
+                            namespace="source_id",
+                            allow_list=[file_doc_id]
+                        ),
+                        aiplatform_v1.IndexDatapoint.Restriction(
+                            namespace="domain",
+                            allow_list=[metadata.get("domain", "unknown")]
+                        )
+                    ]
+                )
+                datapoints.append(datapoint)
+            
+            print(f"[EMBEDDING_SERVICE] Uploading {len(datapoints)} datapoints...")
+            
+            request = aiplatform_v1.UpsertDatapointsRequest(
+                index=self.index_name,
+                datapoints=datapoints
+            )
+            
+            response = self.index_client.upsert_datapoints(request=request)
+            print(f"[EMBEDDING_SERVICE] SUCCESS - Uploaded {len(datapoints)} vectors")
+            
+            return None, None
+            
+        except Exception as e:
+            print(f"[EMBEDDING_SERVICE] ERROR: {e}")
+            import traceback
+            traceback.print_exc()
+            return str(e), None
 
-if __name__ == "__main__":
-    service = EmbeddingService()
-    test_chunks = [
-        "This is the first test chunk.",
-        "Here is another chunk of text for embedding.",
-        "Final chunk for demo purposes."
-    ]
-    file_doc_id = "testfile123"
-    parsed = {"domain": "test_domain", "title": "Test Title", "summary": "Test Summary"}
-    upload_result = {"public_url": "https://example.com/testfile.pdf"}
-    enhanced_meta = {"uploaded_at": "2026-02-01T12:00:00Z"}
-
-    embedding_error, vector_error = service.embed_and_upload(
-        test_chunks, file_doc_id, parsed, upload_result, enhanced_meta
-    )
-    print("Embedding error:", embedding_error)
-    print("Vector upload error:", vector_error)
+    def embed_and_upload_capture(
+        self,
+        capture_id: str,
+        user_id: str,
+        combined_text: str,
+        metadata: dict
+    ) -> Tuple[Optional[str], Optional[str]]:
+        
+        try:
+            print(f"[EMBEDDING_SERVICE] Processing capture {capture_id}...")
+            embeddings = self.get_embeddings([combined_text])
+            
+            datapoint = aiplatform_v1.IndexDatapoint(
+                datapoint_id=f"capture_{capture_id}",
+                feature_vector=embeddings[0],
+                restricts=[
+                    aiplatform_v1.IndexDatapoint.Restriction(
+                        namespace="user_id",
+                        allow_list=[user_id]
+                    ),
+                    aiplatform_v1.IndexDatapoint.Restriction(
+                        namespace="type",
+                        allow_list=["capture"]
+                    ),
+                    aiplatform_v1.IndexDatapoint.Restriction(
+                        namespace="source_id",
+                        allow_list=[capture_id]
+                    ),
+                    aiplatform_v1.IndexDatapoint.Restriction(
+                        namespace="domain",
+                        allow_list=[metadata.get("domain", "unknown")]
+                    )
+                ]
+            )
+            
+            print(f"[EMBEDDING_SERVICE] Uploading capture datapoint...")
+            
+            request = aiplatform_v1.UpsertDatapointsRequest(
+                index=self.index_name,
+                datapoints=[datapoint]
+            )
+            
+            response = self.index_client.upsert_datapoints(request=request)
+            print(f"[EMBEDDING_SERVICE] SUCCESS - Uploaded capture")
+            
+            return None, None
+            
+        except Exception as e:
+            print(f"[EMBEDDING_SERVICE] ERROR: {e}")
+            import traceback
+            traceback.print_exc()
+            return str(e), None

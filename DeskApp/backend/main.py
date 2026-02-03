@@ -7,7 +7,7 @@ import sys
 import uuid
 import json
 import asyncio
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional
 
 # 1. Standard FastAPI imports
@@ -37,6 +37,10 @@ from agents.synthesis_agent import SynthesisAgent
 from agents.graph_agent import GraphAgent
 from agents.resource_finder_agent import ResourceFinderAgent
 
+from services.embedding_service import EmbeddingService
+from services.vector_search_service import VectorSearchService
+from services.rag_service import RAGService
+
 
 from models.capture import (
     CaptureRecord, 
@@ -51,6 +55,9 @@ from models.capture import (
 )
 from datetime import datetime
 import uuid
+
+
+
 
 # Initialize FastAPI
 app = FastAPI()
@@ -79,6 +86,10 @@ orchestrator = PlanningAgent()
 researcher = ResearchAgent()
 proactive = ProactiveAgent()
 resource_finder = ResourceFinderAgent()
+embedding_service = EmbeddingService()
+vector_search_service = VectorSearchService()
+rag_service = RAGService()
+
 
 # Subscribe Agents to the Event Bus
 bus.subscribe("intent_analyzed", orchestrator.process, priority=1)
@@ -472,9 +483,36 @@ async def handle_capture(
 
         await db.save_capture(capture_doc)
         await db.save_memory(memory_doc)
-        
-        comprehensive_capture.timeline.firestore_save_completed = datetime.utcnow()
-        comprehensive_capture.memory_id = capture_id
+
+        # Embed capture to vector search
+        try:
+            print("[VECTOR] Embedding capture for semantic search...")
+            
+            combined_for_embedding = f"""
+            Title: {classification.overall_summary}
+            Domain: {classification.domain}
+            Content: {raw_result.ocr_text}
+            Audio: {raw_result.audio_transcript or ''}
+            Notes: {text_note or ''}
+            """
+            
+            embedding_error, vector_error = embedding_service.embed_and_upload_capture(
+                capture_id=capture_id,
+                user_id=user_id,
+                combined_text=combined_for_embedding,
+                metadata={
+                    'domain': classification.domain,
+                    'timestamp': datetime.now(timezone.utc).isoformat()
+                }
+            )
+            
+            if embedding_error or vector_error:
+                print(f"[VECTOR] Warning: Vector upload failed")
+            else:
+                print(f"[VECTOR] Capture embedded successfully")
+                
+        except Exception as e:
+            print(f"[VECTOR] Non-critical error: {e}")
         
         print(f"[FIRESTORE] Saved comprehensive + legacy formats: {capture_id}")
 
@@ -2264,6 +2302,7 @@ async def get_notes(
 # ============================================
 
 
+
 @app.post("/api/upload-file")
 async def upload_file(
     file: UploadFile = File(...),
@@ -2271,7 +2310,7 @@ async def upload_file(
     authorization: str = Header(None)
 ):
     """
-    Upload a PDF or DOCX file, store it in GCS, and save metadata to Firestore.
+    Upload a PDF or DOCX file, store in GCS, embed, and save to Firestore + Vector Search
     """
     # Auth Check
     if not authorization or not authorization.startswith("Bearer "):
@@ -2284,7 +2323,7 @@ async def upload_file(
     except Exception as e:
         raise HTTPException(status_code=401, detail=f"Invalid token: {str(e)}")
 
-    # Basic validation
+    # Validation
     filename = file.filename
     ext = os.path.splitext(filename)[1].lower()
     if ext not in ('.pdf', '.docx'):
@@ -2298,14 +2337,16 @@ async def upload_file(
 
     # Upload to GCS
     try:
+        from services.storage_service import StorageService
         storage = StorageService()
         dest_path = f"users/{user_id}/files/{str(uuid.uuid4())}{ext}"
         upload_result = storage.upload_file_bytes(contents, dest_path)
+        print(f"[UPLOAD] File uploaded to GCS: {dest_path}")
     except Exception as e:
         print(f"[UPLOAD] GCS upload failed: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to upload file: {str(e)}")
 
-    # Save basic metadata to Firestore (legacy, for compatibility)
+    # Save basic metadata to Firestore
     db = FirestoreService()
     file_meta = {
         'name': filename,
@@ -2317,33 +2358,44 @@ async def upload_file(
         'capture_id': capture_id,
         'uploaded_at': datetime.utcnow().isoformat()
     }
+    
     try:
         file_doc_id = await db.save_user_file(user_id, file_meta)
+        print(f"[UPLOAD] Basic metadata saved to Firestore: {file_doc_id}")
     except Exception as e:
         print(f"[UPLOAD] Firestore save failed: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to save file metadata: {str(e)}")
 
-    # Parse and chunk file, generate title/summary/domain
+    # Parse and chunk file
     import tempfile
     from services.file_parser import FileParser
+    
+    parsed = None
     try:
         with tempfile.NamedTemporaryFile(delete=False, suffix=ext) as tmp:
             tmp.write(contents)
             tmp_path = tmp.name
+        
+        print(f"[UPLOAD] Parsing file...")
         parsed = FileParser.parse_and_chunk(tmp_path)
-        # Clean up temp file
         os.remove(tmp_path)
+        
+        print(f"[UPLOAD]  Parsed: {len(parsed['chunks'])} chunks")
+        print(f"[UPLOAD] Title: {parsed['title']}")
+        print(f"[UPLOAD] Domain: {parsed['domain']}")
+        
     except Exception as e:
         print(f"[UPLOAD] File parsing failed: {e}")
-        parsed = None
+        import traceback
+        traceback.print_exc()
 
-    # Save enhanced metadata to Firestore
-    enhanced_meta = None
+    # Save enhanced metadata + embed to vector search
     embedding_error = None
     vector_error = None
+    
     if parsed:
         try:
-            # Compose metadata for Firestore
+            # Save enhanced metadata to Firestore
             enhanced_meta = {
                 'file_name': parsed['file_name'],
                 'upload_date': parsed['upload_date'],
@@ -2360,28 +2412,218 @@ async def upload_file(
                 'capture_id': capture_id,
                 'uploaded_at': datetime.utcnow().isoformat()
             }
-            # Save using new metadata method
+            
             await db.save_file_metadata(user_id, file_doc_id, enhanced_meta)
-            # --- Embedding and Vector Upload ---
-            try:
-                from services.embedding_service import EmbeddingService
-                chunks = parsed['chunks']
-                embedding_service = EmbeddingService()
-                embedding_error, vector_error = embedding_service.embed_and_upload(
-                    chunks, file_doc_id, parsed, upload_result, enhanced_meta
-                )
-            except Exception as e:
-                print(f"[UPLOAD] Embedding/Vector upload failed: {e}")
+            print(f"[UPLOAD]  Enhanced metadata saved")
+            
+            # Embed and upload to vector search
+            print(f"[UPLOAD] Generating embeddings and uploading to vector search...")
+            
+            embedding_error, vector_error = embedding_service.embed_and_upload_document(
+                chunks=parsed['chunks'],
+                file_doc_id=file_doc_id,
+                user_id=user_id,
+                metadata={
+                    'domain': parsed['domain'],
+                    'title': parsed['title'],
+                    'timestamp': datetime.utcnow().isoformat()
+                }
+            )
+            
+            if embedding_error:
+                print(f"[UPLOAD]  Embedding error: {embedding_error}")
+            elif vector_error:
+                print(f"[UPLOAD]  Vector upload error: {vector_error}")
+            else:
+                print(f"[UPLOAD]  Successfully uploaded to vector search!")
+            
         except Exception as e:
-            print(f"[UPLOAD] Enhanced Firestore save failed: {e}")
+            print(f"[UPLOAD] Enhanced processing failed: {e}")
+            import traceback
+            traceback.print_exc()
 
+# Embed to vector search
+    if parsed:
+        try:
+            print(f"[UPLOAD] Embedding to vector search...")
+            
+            embedding_error, vector_error = embedding_service.embed_and_upload_document(
+                chunks=parsed['chunks'],
+                file_doc_id=file_doc_id,
+                user_id=user_id,
+                metadata={
+                    'domain': parsed['domain'],
+                    'title': parsed['title'],
+                    'timestamp': datetime.now(timezone.utc).isoformat()
+                }
+            )
+            
+            if embedding_error or vector_error:
+                print(f"[UPLOAD] Warning: Vector upload failed")
+                print(f"[UPLOAD] Embedding error: {embedding_error}")
+                print(f"[UPLOAD] Vector error: {vector_error}")
+            else:
+                print(f"[UPLOAD] Successfully embedded to vector search")
+                
+        except Exception as e:
+            print(f"[UPLOAD] Non-critical error embedding: {e}")
+            embedding_error = str(e)
+    
     return {
         "success": True,
         "file_id": file_doc_id,
         "meta": enhanced_meta if parsed else file_meta,
         "embedding_error": embedding_error,
-        "vector_error": vector_error
+        "vector_error": vector_error,
+        "vector_search_ready": (embedding_error is None and vector_error is None)
     }
+
+# ============================================
+# NEW ENDPOINT: CHATBOT SEMANTIC SEARCH
+# ============================================
+
+@app.post("/api/search")
+async def semantic_search(
+    query: str = Form(...),
+    num_results: int = Form(10),
+    filter_type: Optional[str] = Form(None),
+    filter_domain: Optional[str] = Form(None),
+    authorization: str = Header(None)
+):
+    """
+    Semantic search across user's captures and documents using Vector Search
+    
+    Args:
+        query: Natural language search query
+        num_results: Number of results to return (default: 10)
+        filter_type: Optional filter - "capture" or "document"
+        filter_domain: Optional domain filter (e.g., "money_finance")
+    """
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    
+    token = authorization.replace("Bearer ", "")
+    payload = jwt_manager.verify_jwt_token(token)
+    user_id = payload["user_id"]
+    
+    try:
+        print(f"[SEARCH API] User {user_id} searching: '{query}'")
+        
+        results = vector_search_service.search(
+            query=query,
+            user_id=user_id,
+            num_results=num_results,
+            filter_type=filter_type,
+            filter_domain=filter_domain
+        )
+        
+        db = FirestoreService()
+        enriched_results = []
+        
+        for result in results:
+            source_id = result['source_id']
+            item_type = result['type']
+            
+            try:
+                if item_type == "capture":
+                    doc = db._get_user_ref(user_id).collection("memories").document(source_id).get()
+                else:
+                    doc = db._get_user_ref(user_id).collection("files").document(source_id).get()
+                
+                if doc.exists:
+                    item_data = doc.to_dict()
+                    item_data['id'] = doc.id
+                    item_data['_similarity_score'] = 1 - result['distance']
+                    item_data['_vector_distance'] = result['distance']
+                    enriched_results.append(item_data)
+            except Exception as e:
+                print(f"[SEARCH API] Warning: Could not fetch {source_id}: {e}")
+                continue
+        
+        print(f"[SEARCH API] Returning {len(enriched_results)} enriched results")
+        
+        return {
+            "success": True,
+            "query": query,
+            "total_results": len(enriched_results),
+            "filters": {
+                "type": filter_type,
+                "domain": filter_domain
+            },
+            "results": enriched_results
+        }
+        
+    except Exception as e:
+        print(f"[SEARCH API] Search failed: {e}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/ask")
+async def ask_question(
+    question: str = Form(...),
+    filter_domain: Optional[str] = Form(None),
+    authorization: str = Header(None)
+):
+    """RAG endpoint - Returns AI-generated answer with sources"""
+    
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    
+    token = authorization.replace("Bearer ", "")
+    payload = jwt_manager.verify_jwt_token(token)
+    user_id = payload["user_id"]
+    
+    try:
+        result = rag_service.answer_question(
+            query=question,
+            user_id=user_id,
+            num_results=5,
+            filter_domain=filter_domain
+        )
+        
+        return {
+            "success": True,
+            "question": question,
+            "answer": result['answer'],
+            "sources": result['sources'],
+            "confidence": result['confidence']
+        }
+        
+    except Exception as e:
+        print(f"[API] Ask question failed: {e}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/ask/no-auth")
+async def ask_no_auth(
+    question: str = Form(...),
+    filter_domain: Optional[str] = Form(None)
+):
+    """Test endpoint - REMOVE BEFORE PRODUCTION"""
+    user_id = "113314724333098866443"
+    
+    try:
+        result = rag_service.answer_question(
+            query=question,
+            user_id=user_id,
+            filter_domain=filter_domain
+        )
+        
+        return {
+            "success": True,
+            "question": question,
+            "answer": result['answer'],
+            "sources": result['sources']
+        }
+    except Exception as e:
+        print(f"[API] Error: {e}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
 
 if __name__ == "__main__":
     import uvicorn
