@@ -2631,4 +2631,7 @@ if __name__ == "__main__":
     print("[STARTUP] 3-Layer Universal Classification System")
     print("[STARTUP] Domains: 12 | Context Types: 19 | Intents: 14")
     print("[STARTUP] API running at http://localhost:3001")
-    uvicorn.run(app, host="0.0.0.0", port=3001)
+    port = int(os.getenv("PORT", "3001"))
+    uvicorn.run(app, host="0.0.0.0", port=port)
+
+

@@ -3,6 +3,7 @@ from typing import List, Dict, Optional
 from google.cloud import aiplatform
 from google.cloud.aiplatform.matching_engine.matching_engine_index_endpoint import Namespace
 from vertexai.language_models import TextEmbeddingModel
+from core.config import settings
 
 class VectorSearchService:
     

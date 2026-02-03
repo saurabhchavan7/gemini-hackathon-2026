@@ -4,6 +4,8 @@ from google.cloud import aiplatform
 from google.cloud import aiplatform_v1
 from vertexai.language_models import TextEmbeddingModel
 from datetime import datetime
+from core.config import settings
+
 
 class EmbeddingService:
     
