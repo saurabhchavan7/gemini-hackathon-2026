@@ -548,15 +548,15 @@
     }
 
     function handleTextNote() {
-      console.log('📝 Text note - Coming soon!');
-      showTemporaryMessage('Text note - Coming soon!');
+        console.log('Opening text note window...');
+        window.electronAPI.openTextNoteWindow();
     }
 
     function handleAudioNote() {
-      console.log('🎤 Audio note - Coming soon!');
-      showTemporaryMessage('Audio recording - Coming soon!');
+        console.log('Opening audio note window...');
+        window.electronAPI.openAudioNoteWindow();
     }
-
+    
 
 
     function handleFileAttach() {

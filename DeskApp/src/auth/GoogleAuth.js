@@ -14,7 +14,7 @@ const GOOGLE_OAUTH_URL = 'https://accounts.google.com/o/oauth2/v2/auth';
 const REDIRECT_URI = 'http://localhost:3001/auth/callback';
 
 // TODO: Replace with your actual Google OAuth Client ID from GCP Console
-const CLIENT_ID = process.env.GOOGLE_CLIENT_ID || 'YOUR_GOOGLE_CLIENT_ID';
+const CLIENT_ID = process.env.GOOGLE_CLIENT_ID || '1056690364460-4a9srp0ioirfu8c3gbaomtsrher3bjj9.apps.googleusercontent.com';
 
 // OAuth scopes needed for LifeOS
 

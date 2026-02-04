@@ -43,6 +43,26 @@ contextBridge.exposeInMainWorld('electronAPI', {
   openFileDialog: () =>
     ipcRenderer.invoke('open-file-dialog'),
 
+  // TEXT NOTE APIs
+openTextNoteWindow: () =>
+    ipcRenderer.invoke('open-text-note-window'),
+
+sendTextNote: (data) =>
+    ipcRenderer.invoke('send-text-note', data),
+
+onTextNoteData: (callback) =>
+    ipcRenderer.on('text-note-data', (_, data) => callback(data)),
+
+// AUDIO NOTE APIs
+openAudioNoteWindow: () =>
+    ipcRenderer.invoke('open-audio-note-window'),
+
+sendAudioNote: (data) =>
+    ipcRenderer.invoke('send-audio-note', data),
+
+onAudioNoteData: (callback) =>
+    ipcRenderer.on('audio-note-data', (_, data) => callback(data)),
+
   /**
    * Upload a file to the backend (PDF/DOCX)
    * @param {Object} opts - { path, name, size, type }
@@ -63,7 +83,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
     // formData.append('capture_id', ...);
     // Send to backend
     try {
-      const res = await fetch('http://localhost:3001/api/upload-file', {
+      const res = await fetch('https://lifeos-backend-1056690364460.us-central1.run.app/api/upload-file', {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${token}` },
         body: formData

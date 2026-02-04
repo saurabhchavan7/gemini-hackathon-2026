@@ -166,7 +166,7 @@ const checkExistingAuth = async () => {
         {process.env.NODE_ENV === 'development' && (
           <div className="mt-6 p-3 bg-gray-100 rounded text-xs text-gray-600">
             <p>🔧 Development Mode</p>
-            <p className="mt-1">Backend: http://localhost:3001</p>
+            <p className="mt-1">Backend:"https://lifeos-backend-1056690364460.us-central1.run.app"</p>
           </div>
         )}
       </div>
