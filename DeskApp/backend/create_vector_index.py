@@ -1,13 +1,20 @@
+import json
+import os
 from google.cloud import aiplatform
 from google.cloud import storage
-import json
+
 
 # ===== CONFIG =====
-PROJECT_ID = "gemini-hackathon-2026-484903"
-REGION = "us-central1"
-BUCKET_NAME = f"{PROJECT_ID}-lifeos-vectors"
-INDEX_DISPLAY_NAME = "lifeos-items-index"
-DIMENSIONS = 768 # Gemini embeddings dimension
+PROJECT_ID = os.getenv("GCP_PROJECT_ID", "")
+REGION = os.getenv("GCP_LOCATION", "us-central1")
+BUCKET_NAME = os.getenv("VERTEX_BUCKET_NAME", "")
+INDEX_DISPLAY_NAME = os.getenv("VERTEX_INDEX_DISPLAY_NAME", "lifeos-items-index")
+DIMENSIONS = int(os.getenv("VERTEX_EMBEDDING_DIMENSIONS", "768"))  # Gemini embeddings dimension
+
+if not PROJECT_ID:
+    raise ValueError("GCP_PROJECT_ID is required to create a Vertex AI index.")
+if not BUCKET_NAME:
+    BUCKET_NAME = f"{PROJECT_ID}-lifeos-vectors"
 # ==================
 
 # Initialize Vertex AI

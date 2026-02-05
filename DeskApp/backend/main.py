@@ -7,7 +7,7 @@ import sys
 import uuid
 import json
 import asyncio
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional
 
 # 1. Standard FastAPI imports
@@ -27,6 +27,7 @@ from agents.cognition.intent_agent import IntentAgent
 from agents.orchestrator.planning_agent import PlanningAgent
 from agents.research_agent import ResearchAgent
 from services.firestore_service import FirestoreService
+from services.storage_service import StorageService
 from models.capture import Capture, CaptureMetadata
 from models.memory import Memory
 from core.event_bus import bus
@@ -35,6 +36,10 @@ from agents.proactive_agent import ProactiveAgent
 from agents.synthesis_agent import SynthesisAgent
 from agents.graph_agent import GraphAgent
 from agents.resource_finder_agent import ResourceFinderAgent
+
+from services.embedding_service import EmbeddingService
+from services.vector_search_service import VectorSearchService
+from services.rag_service import RAGService
 
 
 from models.capture import (
@@ -50,6 +55,9 @@ from models.capture import (
 )
 from datetime import datetime
 import uuid
+
+
+
 
 # Initialize FastAPI
 app = FastAPI()
@@ -78,6 +86,10 @@ orchestrator = PlanningAgent()
 researcher = ResearchAgent()
 proactive = ProactiveAgent()
 resource_finder = ResourceFinderAgent()
+embedding_service = EmbeddingService()
+vector_search_service = VectorSearchService()
+rag_service = RAGService()
+
 
 # Subscribe Agents to the Event Bus
 bus.subscribe("intent_analyzed", orchestrator.process, priority=1)
@@ -267,25 +279,33 @@ async def ws_transcribe(websocket: WebSocket, token: str = Query(default="")):
 
 @app.post("/api/capture")
 async def handle_capture(
-    screenshot_path: str = Form(...),
+    screenshot_file: Optional[UploadFile] = File(None),  # NOW OPTIONAL
+    audio_file: Optional[UploadFile] = File(None),
     app_name: str = Form("Unknown"),
     window_title: str = Form("Unknown"),
     url: str = Form(""),
     timestamp: str = Form(""),
-    text_note: str = Form(None),
-    audio_path: str = Form(None),
+    text_note: Optional[str] = Form(None),
     timezone: str = Form("UTC"),
     authorization: str = Header(None)
 ):
     """
-    Multi-Agent Capture Pipeline with Comprehensive Metadata Tracking
+    Multi-Agent Capture Pipeline - Accepts File Uploads and stores in GCS
+    
+    Supports:
+    - Screenshot only
+    - Audio only
+    - Text note only
+    - Any combination of the above
     
     Flow:
-    1. Create CaptureRecord (empty classification)
-    2. Agent 1: Perception
-    3. Agent 2: Classification (populates classification field)
-    4. Save comprehensive + legacy formats
-    5. Trigger background agents
+    1. Receive inputs (at least one required)
+    2. Upload to GCS (if files present)
+    3. Agent 1: Perception (OCR + Audio)
+    4. Agent 2: Classification
+    5. Save to Firestore with GCS paths
+    6. Embed to Vector Search
+    7. Trigger background agents
     """
     
     # Auth Check
@@ -296,60 +316,94 @@ async def handle_capture(
     payload = jwt_manager.verify_jwt_token(token)
     user_id = payload["user_id"]
 
-    # Initialize Agents & DB
+    # Validate at least one input is provided
+    if not screenshot_file and not audio_file and not text_note:
+        raise HTTPException(
+            status_code=400, 
+            detail="At least one of: screenshot, audio, or text note must be provided"
+        )
+
+    # Initialize services
     perception = PerceptionAgent()
     cognition = IntentAgent()
     db = FirestoreService()
+    storage = StorageService()
     
     capture_id = str(uuid.uuid4())
     
-    # Get file sizes
-    screenshot_size = os.path.getsize(screenshot_path) if os.path.exists(screenshot_path) else 0
-    audio_size = os.path.getsize(audio_path) if audio_path and os.path.exists(audio_path) else 0
-    
-    # ========================================
-    # STEP 1: CREATE COMPREHENSIVE CAPTURE RECORD
-    # Classification is empty - will populate after Agent 2
-    # ========================================
-    comprehensive_capture = CaptureRecord(
-        id=capture_id,
-        user_id=user_id,
-        capture_type="multi-modal" if audio_path else "screenshot",
-        input=RawInput(
-            screenshot_path=screenshot_path,
-            audio_path=audio_path,
-            text_note=text_note,
-            context=CaptureContext(
-                app_name=app_name,
-                window_title=window_title,
-                url=url or None,
-                platform="windows",
-                timezone=timezone if timezone else "UTC"
-            ),
-            screenshot_size_bytes=screenshot_size,
-            audio_duration_seconds=None
-        )
-    )
-    
-    # Set timeline start
-    comprehensive_capture.timeline.capture_received = datetime.utcnow()
-    
-    print(f"[CAPTURE] Created comprehensive capture record: {capture_id}")
-    print(f"[CAPTURE] Screenshot: {screenshot_size} bytes")
-
     try:
-        # Read Files
-        with open(screenshot_path, "rb") as f:
-            screenshot_bytes = f.read()
+        # Determine capture type
+        if screenshot_file and audio_file:
+            capture_type = "multi-modal"
+        elif screenshot_file:
+            capture_type = "screenshot"
+        elif audio_file:
+            capture_type = "audio"
+        else:
+            capture_type = "text_note"
+        
+        # Read uploaded files (if present)
+        screenshot_bytes = None
+        screenshot_size = 0
+        if screenshot_file:
+            screenshot_bytes = await screenshot_file.read()
+            screenshot_size = len(screenshot_bytes)
         
         audio_bytes = None
-        if audio_path and os.path.exists(audio_path):
-            with open(audio_path, "rb") as f:
-                audio_bytes = f.read()
+        audio_size = 0
+        if audio_file:
+            audio_bytes = await audio_file.read()
+            audio_size = len(audio_bytes)
+        
+        print(f"[CAPTURE] Created capture: {capture_id}")
+        print(f"[CAPTURE] Type: {capture_type}")
+        if screenshot_bytes:
+            print(f"[CAPTURE] Screenshot: {screenshot_size} bytes")
+        if audio_bytes:
+            print(f"[CAPTURE] Audio: {audio_size} bytes")
+        if text_note:
+            print(f"[CAPTURE] Text note: {len(text_note)} characters")
+        
+        # Upload screenshot to GCS (if present)
+        screenshot_gcs_path = None
+        screenshot_upload_result = None
+        if screenshot_bytes:
+            screenshot_gcs_path = f"users/{user_id}/captures/{capture_id}.png"
+            screenshot_upload_result = storage.upload_file_bytes(screenshot_bytes, screenshot_gcs_path)
+            print(f"[CAPTURE] Screenshot uploaded to GCS: {screenshot_gcs_path}")
+        
+        # Upload audio to GCS (if present)
+        audio_gcs_path = None
+        audio_upload_result = None
+        if audio_bytes:
+            audio_gcs_path = f"users/{user_id}/captures/{capture_id}.webm"
+            audio_upload_result = storage.upload_file_bytes(audio_bytes, audio_gcs_path)
+            print(f"[CAPTURE] Audio uploaded to GCS: {audio_gcs_path}")
+        
+        # Create comprehensive capture record with GCS paths
+        comprehensive_capture = CaptureRecord(
+            id=capture_id,
+            user_id=user_id,
+            capture_type=capture_type,
+            input=RawInput(
+                screenshot_path=screenshot_upload_result.get('path') if screenshot_upload_result else None,
+                audio_path=audio_upload_result.get('path') if audio_upload_result else None,
+                text_note=text_note,
+                context=CaptureContext(
+                    app_name=app_name,
+                    window_title=window_title,
+                    url=url or None,
+                    platform="windows",
+                    timezone=timezone if timezone else "UTC"
+                ),
+                screenshot_size_bytes=screenshot_size if screenshot_size > 0 else None,
+                audio_duration_seconds=None
+            )
+        )
+        
+        comprehensive_capture.timeline.capture_received = datetime.utcnow()
 
-        # ========================================
-        # STEP 2: AGENT 1 - PERCEPTION
-        # ========================================
+        # AGENT 1: Perception
         comprehensive_capture.timeline.perception_started = datetime.utcnow()
         print("[Agent 1] Perception analyzing...")
         
@@ -360,7 +414,6 @@ async def handle_capture(
         )
         perception_end = datetime.utcnow()
         
-        # Update perception in capture
         comprehensive_capture.perception.ocr_text = raw_result.ocr_text
         comprehensive_capture.perception.audio_transcript = raw_result.audio_transcript or ""
         comprehensive_capture.perception.visual_description = raw_result.visual_description
@@ -372,9 +425,7 @@ async def handle_capture(
         comprehensive_capture.timeline.perception_completed = perception_end
         print(f"[Agent 1] Completed in {comprehensive_capture.perception.processing_time_ms}ms")
 
-        # ========================================
-        # STEP 3: AGENT 2 - CLASSIFICATION
-        # ========================================
+        # AGENT 2: Classification
         comprehensive_capture.timeline.classification_started = datetime.utcnow()
         print("[Agent 2] Multi-Action Classification...")
         
@@ -404,7 +455,6 @@ async def handle_capture(
                 source_phrase=action.source_phrase
             ))
         
-        # POPULATE classification (was empty before)
         comprehensive_capture.classification.domain = classification.domain
         comprehensive_capture.classification.domain_confidence = 0.9
         comprehensive_capture.classification.context_type = classification.context_type
@@ -419,27 +469,22 @@ async def handle_capture(
         
         comprehensive_capture.timeline.classification_completed = classification_end
         
-        # Log
         print(f"[CLASSIFICATION] Domain: {classification.domain}")
         print(f"[CLASSIFICATION] Context Type: {classification.context_type}")
         print(f"[CLASSIFICATION] Primary Intent: {classification.primary_intent}")
         print(f"[CLASSIFICATION] Total Actions: {len(classification.actions)}")
 
-        # ========================================
-        # STEP 4: SAVE TO FIRESTORE
-        # ========================================
+        # Save to Firestore
         comprehensive_capture.timeline.firestore_save_started = datetime.utcnow()
-        
-        # Save comprehensive capture
         await db.save_comprehensive_capture(comprehensive_capture)
         
-        # BACKWARD COMPATIBILITY: Also save old formats
+        # Create legacy format capture for backward compatibility
         capture_doc = Capture(
             id=capture_id,
             user_id=user_id,
-            capture_type="multi-modal" if audio_path else "screenshot",
-            screenshot_path=screenshot_path,
-            audio_path=audio_path,
+            capture_type=capture_type,
+            screenshot_path=screenshot_upload_result.get('path') if screenshot_upload_result else None,
+            audio_path=audio_upload_result.get('path') if audio_upload_result else None,
             context=CaptureMetadata(
                 app_name=app_name,
                 window_title=window_title,
@@ -471,20 +516,45 @@ async def handle_capture(
 
         await db.save_capture(capture_doc)
         await db.save_memory(memory_doc)
+
+        # Embed to vector search
+        try:
+            print("[VECTOR] Embedding capture for semantic search...")
+            
+            combined_for_embedding = f"""
+            Title: {classification.overall_summary}
+            Domain: {classification.domain}
+            Content: {raw_result.ocr_text}
+            Audio: {raw_result.audio_transcript or ''}
+            Notes: {text_note or ''}
+            """
+            
+            embedding_error, vector_error = embedding_service.embed_and_upload_capture(
+                capture_id=capture_id,
+                user_id=user_id,
+                combined_text=combined_for_embedding,
+                metadata={
+                    'domain': classification.domain,
+                    'timestamp': datetime.now(timezone.utc).isoformat()
+                }
+            )
+            
+            if embedding_error or vector_error:
+                print(f"[VECTOR] Warning: Vector upload failed")
+            else:
+                print(f"[VECTOR] Capture embedded successfully")
+                
+        except Exception as e:
+            print(f"[VECTOR] Non-critical error: {e}")
         
         comprehensive_capture.timeline.firestore_save_completed = datetime.utcnow()
         comprehensive_capture.memory_id = capture_id
         
         print(f"[FIRESTORE] Saved comprehensive + legacy formats: {capture_id}")
 
-        # ========================================
-        # STEP 5: EMIT EVENT TO BACKGROUND AGENTS
-        # ========================================
+        # Emit event to background agents
         user_timezone = capture_doc.context.timezone if capture_doc.context.timezone else "UTC"
         
-        print(f"[EVENT BUS] Emitting intent_analyzed event")
-
-        # Convert actions to dict
         actions_data = []
         for action in classification.actions:
             actions_data.append({
@@ -519,15 +589,13 @@ async def handle_capture(
         
         asyncio.create_task(bus.emit("intent_analyzed", event_data))
 
-        # ========================================
-        # STEP 6: UPDATE STATUS & RETURN
-        # ========================================
         comprehensive_capture.status = "processing"
         await db.update_comprehensive_capture(comprehensive_capture)
 
         return {
             "success": True,
             "capture_id": capture_id,
+            "capture_type": capture_type,
             "summary": classification.overall_summary,
             "domain": classification.domain,
             "context_type": classification.context_type,
@@ -537,6 +605,10 @@ async def handle_capture(
                 {"intent": a.intent, "summary": a.summary[:100]}
                 for a in classification.actions
             ],
+            "gcs_paths": {
+                "screenshot": screenshot_upload_result.get('path') if screenshot_upload_result else None,
+                "audio": audio_upload_result.get('path') if audio_upload_result else None
+            },
             "processing_time_ms": {
                 "perception": comprehensive_capture.perception.processing_time_ms,
                 "classification": comprehensive_capture.classification.processing_time_ms,
@@ -2257,10 +2329,342 @@ async def get_notes(
 # STARTUP
 # ============================================
 
+
+# ============================================
+# FILE UPLOAD ENDPOINT
+# ============================================
+
+
+
+@app.post("/api/upload-file")
+async def upload_file(
+    file: UploadFile = File(...),
+    capture_id: Optional[str] = Form(None),
+    authorization: str = Header(None)
+):
+    """
+    Upload a PDF or DOCX file, store in GCS, embed, and save to Firestore + Vector Search
+    """
+    # Auth Check
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Unauthorized")
+
+    token = authorization.replace("Bearer ", "")
+    try:
+        payload = jwt_manager.verify_jwt_token(token)
+        user_id = payload["user_id"]
+    except Exception as e:
+        raise HTTPException(status_code=401, detail=f"Invalid token: {str(e)}")
+
+    # Validation
+    filename = file.filename
+    ext = os.path.splitext(filename)[1].lower()
+    if ext not in ('.pdf', '.docx'):
+        raise HTTPException(status_code=400, detail="Only .pdf and .docx files are allowed")
+
+    contents = await file.read()
+    size = len(contents)
+    MAX_BYTES = 50 * 1024 * 1024
+    if size > MAX_BYTES:
+        raise HTTPException(status_code=413, detail="File too large (max 50MB)")
+
+    # Upload to GCS
+    try:
+        from services.storage_service import StorageService
+        storage = StorageService()
+        dest_path = f"users/{user_id}/files/{str(uuid.uuid4())}{ext}"
+        upload_result = storage.upload_file_bytes(contents, dest_path)
+        print(f"[UPLOAD] File uploaded to GCS: {dest_path}")
+    except Exception as e:
+        print(f"[UPLOAD] GCS upload failed: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to upload file: {str(e)}")
+
+    # Save basic metadata to Firestore
+    db = FirestoreService()
+    file_meta = {
+        'name': filename,
+        'gcs_path': upload_result.get('path'),
+        'gcs_bucket': upload_result.get('bucket'),
+        'gcs_url': upload_result.get('public_url'),
+        'size_bytes': size,
+        'file_type': file.content_type,
+        'capture_id': capture_id,
+        'uploaded_at': datetime.utcnow().isoformat()
+    }
+    
+    try:
+        file_doc_id = await db.save_user_file(user_id, file_meta)
+        print(f"[UPLOAD] Basic metadata saved to Firestore: {file_doc_id}")
+    except Exception as e:
+        print(f"[UPLOAD] Firestore save failed: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to save file metadata: {str(e)}")
+
+    # Parse and chunk file
+    import tempfile
+    from services.file_parser import FileParser
+    
+    parsed = None
+    try:
+        with tempfile.NamedTemporaryFile(delete=False, suffix=ext) as tmp:
+            tmp.write(contents)
+            tmp_path = tmp.name
+        
+        print(f"[UPLOAD] Parsing file...")
+        parsed = FileParser.parse_and_chunk(tmp_path)
+        os.remove(tmp_path)
+        
+        print(f"[UPLOAD]  Parsed: {len(parsed['chunks'])} chunks")
+        print(f"[UPLOAD] Title: {parsed['title']}")
+        print(f"[UPLOAD] Domain: {parsed['domain']}")
+        
+    except Exception as e:
+        print(f"[UPLOAD] File parsing failed: {e}")
+        import traceback
+        traceback.print_exc()
+
+    # Save enhanced metadata + embed to vector search
+    embedding_error = None
+    vector_error = None
+    
+    if parsed:
+        try:
+            # Save enhanced metadata to Firestore
+            enhanced_meta = {
+                'file_name': parsed['file_name'],
+                'upload_date': parsed['upload_date'],
+                'title': parsed['title'],
+                'summary': parsed['summary'],
+                'domain': parsed['domain'],
+                'chunks': parsed['chunks'],
+                'text': parsed['text'],
+                'gcs_path': upload_result.get('path'),
+                'gcs_bucket': upload_result.get('bucket'),
+                'gcs_url': upload_result.get('public_url'),
+                'size_bytes': size,
+                'file_type': file.content_type,
+                'capture_id': capture_id,
+                'uploaded_at': datetime.utcnow().isoformat()
+            }
+            
+            await db.save_file_metadata(user_id, file_doc_id, enhanced_meta)
+            print(f"[UPLOAD]  Enhanced metadata saved")
+            
+            # Embed and upload to vector search
+            print(f"[UPLOAD] Generating embeddings and uploading to vector search...")
+            
+            embedding_error, vector_error = embedding_service.embed_and_upload_document(
+                chunks=parsed['chunks'],
+                file_doc_id=file_doc_id,
+                user_id=user_id,
+                metadata={
+                    'domain': parsed['domain'],
+                    'title': parsed['title'],
+                    'timestamp': datetime.utcnow().isoformat()
+                }
+            )
+            
+            if embedding_error:
+                print(f"[UPLOAD]  Embedding error: {embedding_error}")
+            elif vector_error:
+                print(f"[UPLOAD]  Vector upload error: {vector_error}")
+            else:
+                print(f"[UPLOAD]  Successfully uploaded to vector search!")
+            
+        except Exception as e:
+            print(f"[UPLOAD] Enhanced processing failed: {e}")
+            import traceback
+            traceback.print_exc()
+
+# Embed to vector search
+    if parsed:
+        try:
+            print(f"[UPLOAD] Embedding to vector search...")
+            
+            embedding_error, vector_error = embedding_service.embed_and_upload_document(
+                chunks=parsed['chunks'],
+                file_doc_id=file_doc_id,
+                user_id=user_id,
+                metadata={
+                    'domain': parsed['domain'],
+                    'title': parsed['title'],
+                    'timestamp': datetime.now(timezone.utc).isoformat()
+                }
+            )
+            
+            if embedding_error or vector_error:
+                print(f"[UPLOAD] Warning: Vector upload failed")
+                print(f"[UPLOAD] Embedding error: {embedding_error}")
+                print(f"[UPLOAD] Vector error: {vector_error}")
+            else:
+                print(f"[UPLOAD] Successfully embedded to vector search")
+                
+        except Exception as e:
+            print(f"[UPLOAD] Non-critical error embedding: {e}")
+            embedding_error = str(e)
+    
+    return {
+        "success": True,
+        "file_id": file_doc_id,
+        "meta": enhanced_meta if parsed else file_meta,
+        "embedding_error": embedding_error,
+        "vector_error": vector_error,
+        "vector_search_ready": (embedding_error is None and vector_error is None)
+    }
+
+# ============================================
+# NEW ENDPOINT: CHATBOT SEMANTIC SEARCH
+# ============================================
+
+@app.post("/api/search")
+async def semantic_search(
+    query: str = Form(...),
+    num_results: int = Form(10),
+    filter_type: Optional[str] = Form(None),
+    filter_domain: Optional[str] = Form(None),
+    authorization: str = Header(None)
+):
+    """
+    Semantic search across user's captures and documents using Vector Search
+    
+    Args:
+        query: Natural language search query
+        num_results: Number of results to return (default: 10)
+        filter_type: Optional filter - "capture" or "document"
+        filter_domain: Optional domain filter (e.g., "money_finance")
+    """
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    
+    token = authorization.replace("Bearer ", "")
+    payload = jwt_manager.verify_jwt_token(token)
+    user_id = payload["user_id"]
+    
+    try:
+        print(f"[SEARCH API] User {user_id} searching: '{query}'")
+        
+        results = vector_search_service.search(
+            query=query,
+            user_id=user_id,
+            num_results=num_results,
+            filter_type=filter_type,
+            filter_domain=filter_domain
+        )
+        
+        db = FirestoreService()
+        enriched_results = []
+        
+        for result in results:
+            source_id = result['source_id']
+            item_type = result['type']
+            
+            try:
+                if item_type == "capture":
+                    doc = db._get_user_ref(user_id).collection("memories").document(source_id).get()
+                else:
+                    doc = db._get_user_ref(user_id).collection("files").document(source_id).get()
+                
+                if doc.exists:
+                    item_data = doc.to_dict()
+                    item_data['id'] = doc.id
+                    item_data['_similarity_score'] = 1 - result['distance']
+                    item_data['_vector_distance'] = result['distance']
+                    enriched_results.append(item_data)
+            except Exception as e:
+                print(f"[SEARCH API] Warning: Could not fetch {source_id}: {e}")
+                continue
+        
+        print(f"[SEARCH API] Returning {len(enriched_results)} enriched results")
+        
+        return {
+            "success": True,
+            "query": query,
+            "total_results": len(enriched_results),
+            "filters": {
+                "type": filter_type,
+                "domain": filter_domain
+            },
+            "results": enriched_results
+        }
+        
+    except Exception as e:
+        print(f"[SEARCH API] Search failed: {e}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/ask")
+async def ask_question(
+    question: str = Form(...),
+    filter_domain: Optional[str] = Form(None),
+    authorization: str = Header(None)
+):
+    """RAG endpoint - Returns AI-generated answer with sources"""
+    
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    
+    token = authorization.replace("Bearer ", "")
+    payload = jwt_manager.verify_jwt_token(token)
+    user_id = payload["user_id"]
+    
+    try:
+        result = rag_service.answer_question(
+            query=question,
+            user_id=user_id,
+            num_results=5,
+            filter_domain=filter_domain
+        )
+        
+        return {
+            "success": True,
+            "question": question,
+            "answer": result['answer'],
+            "sources": result['sources'],
+            "confidence": result['confidence']
+        }
+        
+    except Exception as e:
+        print(f"[API] Ask question failed: {e}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/ask/no-auth")
+async def ask_no_auth(
+    question: str = Form(...),
+    filter_domain: Optional[str] = Form(None)
+):
+    """Test endpoint - REMOVE BEFORE PRODUCTION"""
+    user_id = "113314724333098866443"
+    
+    try:
+        result = rag_service.answer_question(
+            query=question,
+            user_id=user_id,
+            filter_domain=filter_domain
+        )
+        
+        return {
+            "success": True,
+            "question": question,
+            "answer": result['answer'],
+            "sources": result['sources']
+        }
+    except Exception as e:
+        print(f"[API] Error: {e}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 if __name__ == "__main__":
     import uvicorn
     print("[STARTUP] LifeOS Multi-Agent System v2.0")
     print("[STARTUP] 3-Layer Universal Classification System")
     print("[STARTUP] Domains: 12 | Context Types: 19 | Intents: 14")
-    print("[STARTUP] API running at http://localhost:3001")
-    uvicorn.run(app, host="0.0.0.0", port=3001)
+    print("[STARTUP] API running athttps://lifeos-backend-1056690364460.us-central1.run.app")
+    port = int(os.getenv("PORT", "3001"))
+    uvicorn.run(app, host="0.0.0.0", port=port)
+
+

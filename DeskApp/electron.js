@@ -16,7 +16,7 @@
 const GoogleAuth = require('./src/auth/GoogleAuth');
 const TokenManager = require('./src/auth/TokenManager');
 const CloudRunClient = require('./src/api/CloudRunClient');
-const { app, BrowserWindow, ipcMain, globalShortcut, desktopCapturer, screen, Notification } = require('electron');
+const { app, BrowserWindow, ipcMain, globalShortcut, desktopCapturer, screen, Notification, dialog } = require('electron');
 const path = require('path');
 const fs = require('fs');
 
@@ -190,7 +190,7 @@ let mainWindow = null;
 let floatingButton = null;
 
 // Backend URL - adjust as needed
-const BACKEND_URL = process.env.BACKEND_URL || 'http://localhost:3001';
+const BACKEND_URL = process.env.BACKEND_URL || 'https://lifeos-backend-1056690364460.us-central1.run.app';
 
 // Ensure captures directory exists
 const capturesDir = path.join(__dirname, 'captures', 'screenshots');
@@ -435,23 +435,33 @@ async function sendToBackend(screenshotPath, context, audioPath, textNote, trans
     const axios = require('axios');
     const token = await TokenManager.getToken();
 
-    // 🔍 DEBUG: Log what we're sending
-    console.log('🌍 Context timezone:', context.timezone);
-    console.log('🌍 Detected timezone:', Intl.DateTimeFormat().resolvedOptions().timeZone);
-    
-    // Use detected timezone if context doesn't have it
     const userTimezone = context.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone;
-    console.log('🌍 Using timezone:', userTimezone);
 
     const form = new FormData();
-    form.append('screenshot_path', screenshotPath);
+    
+    // Upload screenshot FILE (not path)
+    const screenshotBuffer = fs.readFileSync(screenshotPath);
+    form.append('screenshot_file', screenshotBuffer, {
+      filename: path.basename(screenshotPath),
+      contentType: 'image/png'
+    });
+    
+    // Upload audio FILE if exists
+    if (audioPath && fs.existsSync(audioPath)) {
+      const audioBuffer = fs.readFileSync(audioPath);
+      form.append('audio_file', audioBuffer, {
+        filename: path.basename(audioPath),
+        contentType: 'audio/webm'
+      });
+    }
+    
+    // Add metadata as form fields
     form.append('app_name', context.appName || 'Unknown');
     form.append('window_title', context.windowTitle || 'Unknown');
     form.append('url', context.url || '');
     form.append('timestamp', context.timestamp);
-    form.append('timezone', userTimezone);  // ← CHANGED THIS LINE
-
-    if (audioPath) form.append('audio_path', audioPath);
+    form.append('timezone', userTimezone);
+    
     if (textNote) form.append('text_note', textNote);
     if (transcript) form.append('audio_transcript', transcript);
 
@@ -465,11 +475,9 @@ async function sendToBackend(screenshotPath, context, audioPath, textNote, trans
     return response.data;
   } catch (error) {
     console.error('❌ Backend upload failed:', error.message);
-    console.error('❌ Error details:', error);
-    throw error;  // ← Changed: throw instead of returning error object
+    throw error;
   }
 }
-
 
 // Handle screenshot capture
 ipcMain.handle('capture-screenshot', async (event) => {
@@ -773,9 +781,264 @@ ipcMain.handle('get-auth-token', async () => {
   }
 });
 
+// File Dialog Handler - Optimized for Speed - PDF and DOCX Only
+ipcMain.handle('open-file-dialog', async () => {
+  try {
+    const result = await dialog.showOpenDialog({
+      title: 'Select a file to attach (PDF or DOCX only)',
+      defaultPath: app.getPath('documents') || app.getPath('home'),
+      buttonLabel: 'Select',
+      properties: ['openFile'],
+      filters: [
+        { name: 'PDF & Word Documents (*.pdf, *.docx)', extensions: ['pdf', 'docx'] }
+      ]
+    });
+
+    if (result.canceled) {
+      return { success: false, filePath: null, message: 'File selection canceled' };
+    }
+
+    const filePath = result.filePaths[0];
+    const fileName = path.basename(filePath);
+    const fileExtension = path.extname(filePath).toLowerCase();
+
+    // Validate file type
+    if (!['.pdf', '.docx'].includes(fileExtension)) {
+      console.warn('⚠️ Invalid file type:', fileExtension);
+      return {
+        success: false,
+        filePath: null,
+        error: `Invalid file type: ${fileExtension}. Only .pdf and .docx files are allowed.`
+      };
+    }
+
+    const fileSize = fs.statSync(filePath).size;
+
+    // Check file size (limit to 50MB)
+    const maxSize = 50 * 1024 * 1024; // 50MB
+    if (fileSize > maxSize) {
+      console.warn('⚠️ File too large:', (fileSize / 1024 / 1024).toFixed(2), 'MB');
+      return {
+        success: false,
+        filePath: null,
+        error: `File too large. Maximum size is 50MB. Your file is ${(fileSize / 1024 / 1024).toFixed(2)}MB.`
+      };
+    }
+
+    console.log('✅ File selected:', fileName, `(${(fileSize / 1024 / 1024).toFixed(2)} MB)`);
+
+    return {
+      success: true,
+      filePath: filePath,
+      fileName: fileName,
+      fileSize: fileSize,
+      fileType: fileExtension.substring(1).toUpperCase(),
+      message: 'File selected successfully'
+    };
+  } catch (error) {
+    console.error('❌ File dialog error:', error);
+    return {
+      success: false,
+      filePath: null,
+      error: error.message
+    };
+  }
+});
 
 
 // App lifecycle - INITIALIZE STORE FIRST
+// IPC: Read file as buffer for renderer upload
+ipcMain.handle('read-file-buffer', async (event, filePath) => {
+  try {
+    const data = fs.readFileSync(filePath);
+    return data.buffer;
+  } catch (err) {
+    console.error('❌ Failed to read file buffer:', err);
+    return null;
+  }
+});
+
+// IPC: Get JWT token for renderer
+
+// TEXT NOTE HANDLER
+let textNoteWindow = null;
+
+ipcMain.handle('open-text-note-window', async () => {
+  try {
+    if (textNoteWindow && !textNoteWindow.isDestroyed()) {
+      textNoteWindow.focus();
+      return { success: true };
+    }
+
+    const context = await getActiveWindowContext();
+
+    textNoteWindow = new BrowserWindow({
+      width: 450,
+      height: 380,
+      frame: false,
+      transparent: true,
+      alwaysOnTop: true,
+      resizable: false,
+      skipTaskbar: true,
+      webPreferences: {
+        preload: path.join(__dirname, 'preload.js'),
+        contextIsolation: true,
+        nodeIntegration: false
+      }
+    });
+
+    const display = screen.getPrimaryDisplay();
+    const { x, y, width, height } = display.workArea;
+    textNoteWindow.setPosition(
+      Math.floor(x + (width - 450) / 2),
+      Math.floor(y + (height - 380) / 2)
+    );
+
+    await textNoteWindow.loadFile(path.join(__dirname, 'src', 'components', 'TextNoteWindow.html'));
+    
+    textNoteWindow.webContents.send('text-note-data', { context });
+
+    textNoteWindow.on('closed', () => {
+      textNoteWindow = null;
+    });
+
+    return { success: true };
+  } catch (error) {
+    console.error('Failed to open text note window:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle('send-text-note', async (event, data) => {
+  try {
+    const FormData = require('form-data');
+    const axios = require('axios');
+    const token = await TokenManager.getToken();
+
+    const userTimezone = data.context?.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone;
+
+    const form = new FormData();
+    
+    // No screenshot or audio for text-only note
+    form.append('app_name', data.context?.appName || 'Unknown');
+    form.append('window_title', data.context?.windowTitle || 'Unknown');
+    form.append('url', data.context?.url || '');
+    form.append('timestamp', new Date().toISOString());
+    form.append('timezone', userTimezone);
+    form.append('text_note', data.text);
+
+    const response = await axios.post(`${BACKEND_URL}/api/capture`, form, {
+      headers: {
+        ...form.getHeaders(),
+        'Authorization': `Bearer ${token}`
+      }
+    });
+
+    console.log('Text note sent successfully:', response.data);
+    
+    if (floatingButton && !floatingButton.isDestroyed()) {
+      floatingButton.webContents.send('capture-sent-success');
+    }
+
+    return { success: true, result: response.data };
+  } catch (error) {
+    console.error('Failed to send text note:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+// AUDIO NOTE HANDLER
+let audioNoteWindow = null;
+
+ipcMain.handle('open-audio-note-window', async () => {
+  try {
+    if (audioNoteWindow && !audioNoteWindow.isDestroyed()) {
+      audioNoteWindow.focus();
+      return { success: true };
+    }
+
+    const context = await getActiveWindowContext();
+
+    audioNoteWindow = new BrowserWindow({
+      width: 450,
+      height: 460,
+      frame: false,
+      transparent: true,
+      alwaysOnTop: true,
+      resizable: false,
+      skipTaskbar: true,
+      webPreferences: {
+        preload: path.join(__dirname, 'preload.js'),
+        contextIsolation: true,
+        nodeIntegration: false
+      }
+    });
+
+    const display = screen.getPrimaryDisplay();
+    const { x, y, width, height } = display.workArea;
+    audioNoteWindow.setPosition(
+      Math.floor(x + (width - 450) / 2),
+      Math.floor(y + (height - 460) / 2)
+    );
+
+    await audioNoteWindow.loadFile(path.join(__dirname, 'src', 'components', 'AudioRecordWindow.html'));
+    
+    audioNoteWindow.webContents.send('audio-note-data', { context });
+
+    audioNoteWindow.on('closed', () => {
+      audioNoteWindow = null;
+    });
+
+    return { success: true };
+  } catch (error) {
+    console.error('Failed to open audio note window:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle('send-audio-note', async (event, data) => {
+  try {
+    const FormData = require('form-data');
+    const axios = require('axios');
+    const token = await TokenManager.getToken();
+
+    const userTimezone = data.context?.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone;
+
+    const form = new FormData();
+    
+    // Upload audio only
+    const audioBuffer = Buffer.from(data.audioBuffer);
+    form.append('audio_file', audioBuffer, {
+      filename: `audio_${Date.now()}.webm`,
+      contentType: 'audio/webm'
+    });
+    
+    form.append('app_name', data.context?.appName || 'Unknown');
+    form.append('window_title', data.context?.windowTitle || 'Unknown');
+    form.append('url', data.context?.url || '');
+    form.append('timestamp', new Date().toISOString());
+    form.append('timezone', userTimezone);
+
+    const response = await axios.post(`${BACKEND_URL}/api/capture`, form, {
+      headers: {
+        ...form.getHeaders(),
+        'Authorization': `Bearer ${token}`
+      }
+    });
+
+    console.log('Audio note sent successfully:', response.data);
+    
+    if (floatingButton && !floatingButton.isDestroyed()) {
+      floatingButton.webContents.send('capture-sent-success');
+    }
+
+    return { success: true, result: response.data };
+  } catch (error) {
+    console.error('Failed to send audio note:', error);
+    return { success: false, error: error.message };
+  }
+});
+
 app.whenReady().then(async () => {
   console.log('🚀 LifeOS starting...');
 

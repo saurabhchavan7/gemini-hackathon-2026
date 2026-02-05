@@ -13,7 +13,7 @@ load_dotenv(dotenv_path=env_path)
 
 class Settings(BaseSettings):
     # Infrastructure & GCP Settings
-    PROJECT_ID: str = os.getenv("GCP_PROJECT_ID", "gemini-hackathon-2026-484903")
+    PROJECT_ID: str = os.getenv("GCP_PROJECT_ID", "")
     LOCATION: str = os.getenv("GCP_LOCATION", "us-central1")
     
     # Gemini Model Versions
@@ -34,7 +34,7 @@ class Settings(BaseSettings):
 
     # API Keys & Secrets
     GOOGLE_API_KEY: str = os.getenv("GOOGLE_API_KEY", "")
-    JWT_SECRET: str = os.getenv("JWT_SECRET", "your-fallback-secret-here")
+    JWT_SECRET: str = os.getenv("JWT_SECRET", "")
     
     # Google OAuth Settings (For Desktop App Login)
     GOOGLE_CLIENT_ID: str = os.getenv("GOOGLE_CLIENT_ID", "")
@@ -45,6 +45,11 @@ class Settings(BaseSettings):
     GOOGLE_CREDENTIALS_FILE: str = "google_credentials.json"
     GOOGLE_TOKENS_DIR: str = "tokens"
 
+    # Vertex AI Vector Search
+    VERTEX_INDEX_ENDPOINT_ID: str = os.getenv("VERTEX_INDEX_ENDPOINT_ID", "")
+    VERTEX_DEPLOYED_INDEX_ID: str = os.getenv("VERTEX_DEPLOYED_INDEX_ID", "")
+    VERTEX_INDEX_NAME: str = os.getenv("VERTEX_INDEX_NAME", "")
+
     # Pydantic Configuration
     model_config = SettingsConfigDict(
         env_file=str(env_path),
@@ -54,8 +59,6 @@ class Settings(BaseSettings):
 
 settings = Settings()
 
-# Debug print to confirm loading
+# Debug print to confirm loading (avoid leaking secrets)
 if not settings.GOOGLE_API_KEY:
     print(f"[ERROR] API Key missing in: {env_path}")
-else:
-    print(f"[CONFIG] API Key loaded (starts with: {settings.GOOGLE_API_KEY[:5]}...)")
