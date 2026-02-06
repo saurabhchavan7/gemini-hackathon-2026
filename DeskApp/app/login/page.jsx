@@ -26,31 +26,31 @@ export default function Login() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
- /**
- * Check if already authenticated on mount
- * If yes, redirect to inbox
- */
-useEffect(() => {
-  checkExistingAuth();
-}, []);
+  /**
+  * Check if already authenticated on mount
+  * If yes, redirect to inbox
+  */
+  useEffect(() => {
+    checkExistingAuth();
+  }, []);
 
-/**
- * Check for existing authentication
- */
-const checkExistingAuth = async () => {
-  try {
-    if (!window.electronAPI) return;
-    
-    const authStatus = await window.electronAPI.checkAuth();
-    
-    if (authStatus.isAuthenticated) {
-      console.log('✅ Already authenticated, redirecting...');
-      router.push('/inbox');  // Changed from '/' to '/inbox'
+  /**
+   * Check for existing authentication
+   */
+  const checkExistingAuth = async () => {
+    try {
+      if (!window.electronAPI) return;
+
+      const authStatus = await window.electronAPI.checkAuth();
+
+      if (authStatus.isAuthenticated) {
+        console.log('✅ Already authenticated, redirecting...');
+        router.push('/inbox');  // Changed from '/' to '/inbox'
+      }
+    } catch (err) {
+      console.log('ℹ️ Not authenticated, showing login');
     }
-  } catch (err) {
-    console.log('ℹ️ Not authenticated, showing login');
-  }
-};
+  };
 
   /**
    * Handle Google Sign-In button click
@@ -62,27 +62,27 @@ const checkExistingAuth = async () => {
 
     try {
       console.log('🔐 Starting login...');
-      
+
       // Call Electron IPC to start OAuth flow
       const result = await window.electronAPI.googleLogin();
-      
+
       if (result.success) {
         console.log('✅ Login successful!');
         console.log('👤 User:', result.user.email);
-        
+
         // Redirect to dashboard using Next.js router
         router.push('/inbox');
 
-        
+
       } else {
         // Login failed
         throw new Error(result.error || 'Login failed');
       }
-      
+
     } catch (err) {
       console.error('❌ Login error:', err);
       setError(err.message || 'Failed to sign in. Please try again.');
-      
+
     } finally {
       setLoading(false);
     }
@@ -91,7 +91,7 @@ const checkExistingAuth = async () => {
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100">
       <div className="bg-white p-8 rounded-2xl shadow-xl w-full max-w-md">
-        
+
         {/* Header */}
         <div className="text-center mb-8">
           <h1 className="text-3xl font-bold text-gray-900 mb-2">LifeOS</h1>
@@ -166,7 +166,7 @@ const checkExistingAuth = async () => {
         {process.env.NODE_ENV === 'development' && (
           <div className="mt-6 p-3 bg-gray-100 rounded text-xs text-gray-600">
             <p>🔧 Development Mode</p>
-            <p className="mt-1">Backend:"https://lifeos-backend-1056690364460.us-central1.run.app"</p>
+            <p className="mt-1">Backend: {process.env.NEXT_PUBLIC_BACKEND_URL || 'http://127.0.0.1:8000'}</p>
           </div>
         )}
       </div>

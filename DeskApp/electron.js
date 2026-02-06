@@ -13,12 +13,16 @@
  * - Logout
  */
 
+require('dotenv').config();
+
 const GoogleAuth = require('./src/auth/GoogleAuth');
 const TokenManager = require('./src/auth/TokenManager');
 const CloudRunClient = require('./src/api/CloudRunClient');
+const axios = require('axios');
 const { app, BrowserWindow, ipcMain, globalShortcut, desktopCapturer, screen, Notification, dialog } = require('electron');
 const path = require('path');
 const fs = require('fs');
+
 
 // Import electron-store - it's an ES module, so we need to import it differently
 let Store;
@@ -174,6 +178,65 @@ ipcMain.handle('show-capture-notification', async (event, data) => {
 
 
 
+ipcMain.handle('api-get-inbox', async (event, params) => {
+  try {
+    console.log('📥 [IPC] Getting inbox with params:', params);
+    const result = await CloudRunClient.getInbox(params);
+    console.log('✅ [IPC] Inbox retrieved:', result.total, 'items');
+    return result;
+  } catch (error) {
+    console.error('❌ [IPC] Failed to get inbox:', error);
+    console.error('❌ [IPC] Error details:', error.response?.data || error.message);
+    return { success: false, items: [], total: 0, error: error.message };
+  }
+});
+
+ipcMain.handle('api-get-capture', async (event, captureId) => {
+  try {
+    console.log('📄 [IPC] Getting capture:', captureId);
+    const result = await CloudRunClient.getCaptureById(captureId);
+    return result;
+  } catch (error) {
+    console.error('❌ [IPC] Failed to get capture:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+
+
+ipcMain.handle('api-ask-capture', async (event, captureId, question) => {
+  try {
+    console.log('💬 [IPC] Asking about capture:', captureId, 'Question:', question);
+    
+    const token = await TokenManager.getToken();
+    if (!token) {
+      return { success: false, error: 'Not authenticated' };
+    }
+    
+    const params = new URLSearchParams();
+    params.append('question', question);
+    
+    const response = await axios.post(
+      `${BACKEND_URL}/api/inbox/${captureId}/ask`,
+      params,
+      {
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+          'Authorization': `Bearer ${token}`
+        }
+      }
+    );
+    
+    console.log('✅ [IPC] Answer received:', response.data.answer);
+    return response.data;
+    
+  } catch (error) {
+    console.error('❌ [IPC] Failed to ask about capture:', error.message);
+    console.error('❌ [IPC] Error details:', error.response?.data || error.response || error);
+    return { success: false, error: error.response?.data?.detail || error.message };
+  }
+});
+
 // Async initialization function
 async function initializeStore() {
   Store = (await import('electron-store')).default;
@@ -189,8 +252,8 @@ async function initializeStore() {
 let mainWindow = null;
 let floatingButton = null;
 
-// Backend URL - adjust as needed
-const BACKEND_URL = process.env.BACKEND_URL || 'https://lifeos-backend-1056690364460.us-central1.run.app';
+const BACKEND_URL = process.env.BACKEND_URL || 'http://127.0.0.1:8000';
+console.log('🌐 [ELECTRON] Backend URL:', BACKEND_URL);
 
 // Ensure captures directory exists
 const capturesDir = path.join(__dirname, 'captures', 'screenshots');
@@ -240,20 +303,92 @@ async function createMainWindow() {
 }
 
 // Create floating capture button
+// function createFloatingButton() {
+//   // Get saved position or use default
+//   const savedPosition = store.get('buttonPosition');
+
+//   // Get primary display dimensions
+//   const primaryDisplay = screen.getPrimaryDisplay();
+//   const { width, height } = primaryDisplay.workAreaSize;
+
+//   // Ensure position is within screen bounds
+//   const x = Math.min(savedPosition.x, width - 90);
+//   const y = Math.min(savedPosition.y, height - 90);
+
+//   floatingButton = new BrowserWindow({
+//     width: 280,  // ← Reduced from 600 to fit just the menu
+//     height: 280,
+//     x: x,
+//     y: y,
+//     frame: false,
+//     transparent: true,
+//     alwaysOnTop: true,
+//     resizable: false,
+//     movable: true,
+//     skipTaskbar: true,
+//     focusable: false,
+//     webPreferences: {
+//       preload: path.join(__dirname, 'preload.js'),
+//       contextIsolation: true,
+//       nodeIntegration: false
+//     }
+//   });
+
+//   // Load the floating button HTML
+//   floatingButton.loadFile(path.join(__dirname, 'src', 'components', 'floating-button.html'));
+
+//   floatingButton.webContents.on('did-fail-load', (event, errorCode, errorDescription) => {
+//     console.error('❌ Floating button failed to load:', errorCode, errorDescription);
+//   });
+
+//   floatingButton.webContents.on('did-finish-load', () => {
+//     floatingButton.show();
+//     console.log('✅ Floating button loaded successfully');
+//   });
+//   // Keep window on top with highest priority
+//   floatingButton.setAlwaysOnTop(true, 'screen-saver');
+//   floatingButton.setVisibleOnAllWorkspaces(true);
+
+//   // Set click-through for the window (allow clicking through transparent areas)
+//   floatingButton.setIgnoreMouseEvents(false);
+
+//   // Save position when window is moved
+//   floatingButton.on('moved', () => {
+//     const position = floatingButton.getPosition();
+//     store.set('buttonPosition', { x: position[0], y: position[1] });
+//   });
+
+//   floatingButton.on('closed', () => {
+//     floatingButton = null;
+//   });
+
+//   // Open DevTools in development (for debugging)
+//   if (process.env.NODE_ENV === 'development') {
+//     floatingButton.webContents.openDevTools({ mode: 'detach' });
+//   }
+// }
+
+// Debug code to add to electron.js in createFloatingButton() function
+
 function createFloatingButton() {
+  console.log('🔍 [DEBUG] createFloatingButton called');
+  
   // Get saved position or use default
   const savedPosition = store.get('buttonPosition');
+  console.log('🔍 [DEBUG] Saved position:', savedPosition);
 
   // Get primary display dimensions
   const primaryDisplay = screen.getPrimaryDisplay();
   const { width, height } = primaryDisplay.workAreaSize;
+  console.log('🔍 [DEBUG] Screen size:', { width, height });
 
   // Ensure position is within screen bounds
   const x = Math.min(savedPosition.x, width - 90);
   const y = Math.min(savedPosition.y, height - 90);
+  console.log('🔍 [DEBUG] Button position:', { x, y });
 
   floatingButton = new BrowserWindow({
-    width: 280,  // ← Reduced from 600 to fit just the menu
+    width: 280,
     height: 280,
     x: x,
     y: y,
@@ -264,6 +399,7 @@ function createFloatingButton() {
     movable: true,
     skipTaskbar: true,
     focusable: false,
+    show: true,  // ⭐ Try with this first
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
@@ -271,19 +407,39 @@ function createFloatingButton() {
     }
   });
 
+  console.log('🔍 [DEBUG] BrowserWindow created');
+  console.log('🔍 [DEBUG] floatingButton exists?', !!floatingButton);
+  console.log('🔍 [DEBUG] floatingButton.isVisible()?', floatingButton.isVisible());
+  console.log('🔍 [DEBUG] floatingButton.isDestroyed()?', floatingButton.isDestroyed());
+
   // Load the floating button HTML
-  floatingButton.loadFile(path.join(__dirname, 'src', 'components', 'floating-button.html'));
+  const buttonPath = path.join(__dirname, 'src', 'components', 'floating-button.html');
+  console.log('🔍 [DEBUG] Loading from path:', buttonPath);
+  console.log('🔍 [DEBUG] File exists?', fs.existsSync(buttonPath));
+
+  floatingButton.loadFile(buttonPath);
 
   floatingButton.webContents.on('did-fail-load', (event, errorCode, errorDescription) => {
-    console.error('❌ Floating button failed to load:', errorCode, errorDescription);
+    console.error('❌ [DEBUG] Floating button failed to load:', errorCode, errorDescription);
   });
 
   floatingButton.webContents.on('did-finish-load', () => {
-    console.log('✅ Floating button loaded successfully');
+    console.log('✅ [DEBUG] Floating button loaded successfully');
+    console.log('🔍 [DEBUG] After load - isVisible?', floatingButton.isVisible());
+    console.log('🔍 [DEBUG] After load - getBounds:', floatingButton.getBounds());
+    
+    // Force show
+    floatingButton.show();
+    floatingButton.focus(); // Try to focus it
+    
+    console.log('🔍 [DEBUG] After show() - isVisible?', floatingButton.isVisible());
+    console.log('🔍 [DEBUG] After show() - isFocused?', floatingButton.isFocused());
   });
+
   // Keep window on top with highest priority
   floatingButton.setAlwaysOnTop(true, 'screen-saver');
   floatingButton.setVisibleOnAllWorkspaces(true);
+  console.log('🔍 [DEBUG] Set always on top and visible on all workspaces');
 
   // Set click-through for the window (allow clicking through transparent areas)
   floatingButton.setIgnoreMouseEvents(false);
@@ -291,17 +447,22 @@ function createFloatingButton() {
   // Save position when window is moved
   floatingButton.on('moved', () => {
     const position = floatingButton.getPosition();
+    console.log('🔍 [DEBUG] Button moved to:', position);
     store.set('buttonPosition', { x: position[0], y: position[1] });
   });
 
   floatingButton.on('closed', () => {
+    console.log('🔍 [DEBUG] Floating button closed');
     floatingButton = null;
   });
 
   // Open DevTools in development (for debugging)
   if (process.env.NODE_ENV === 'development') {
+    console.log('🔍 [DEBUG] Opening DevTools for floating button');
     floatingButton.webContents.openDevTools({ mode: 'detach' });
   }
+  
+  console.log('🔍 [DEBUG] createFloatingButton completed');
 }
 
 // Register global keyboard shortcut
@@ -431,6 +592,8 @@ async function getBrowserUrl(browserProcess) {
 // Send capture to backend
 async function sendToBackend(screenshotPath, context, audioPath, textNote, transcript = null) {
   try {
+    console.log('📤 [ELECTRON] Sending to backend:', BACKEND_URL);
+
     const FormData = require('form-data');
     const axios = require('axios');
     const token = await TokenManager.getToken();
@@ -1053,6 +1216,7 @@ app.whenReady().then(async () => {
   const isAuthenticated = await TokenManager.isAuthenticated();
   if (isAuthenticated) {
     console.log('✅ User already authenticated, creating floating button...');
+    store.set('buttonPosition', { x: 300, y: 300 });  // Reset to visible location
     createFloatingButton();
   }
 

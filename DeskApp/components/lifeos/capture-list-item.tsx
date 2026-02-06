@@ -4,6 +4,7 @@ import { AlertCircle, Calendar, Clock, ExternalLink } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import type { CaptureItem } from "@/types/lifeos";
+import { AskGeminiButton } from "./ask-gemini-button";
 
 interface CaptureListItemProps {
   item: CaptureItem;
@@ -37,7 +38,7 @@ const intentIcons: Record<string, string> = {
 };
 
 export function CaptureListItem({ item, isSelected, onClick }: CaptureListItemProps) {
-  const isExpiringSoon = item.deadline && 
+  const isExpiringSoon = item.deadline &&
     new Date(item.deadline).getTime() - Date.now() < 3 * 24 * 60 * 60 * 1000;
 
   return (
@@ -57,11 +58,38 @@ export function CaptureListItem({ item, isSelected, onClick }: CaptureListItemPr
           {item.title}
         </h3>
         <div className="flex shrink-0 items-center gap-1.5">
-          <Badge variant="outline" className={cn("text-xs", statusColors[item.status])}>
-            {item.status}
-          </Badge>
-        </div>
+          {/* Ask Gemini Button - moved here */}
+          <div
+            onClick={(e) => {
+              e.stopPropagation();
+              e.preventDefault();
+            }}
+            onMouseDown={(e) => {
+              e.stopPropagation();
+            }}
+            onKeyDown={(e) => {
+              // Prevent all keyboard events from bubbling to parent button
+              e.stopPropagation();
+              e.preventDefault();
+            }}
+            onKeyUp={(e) => {
+              // Prevent all keyboard events from bubbling to parent button
+              e.stopPropagation();
+              e.preventDefault();
+            }}
+            onKeyPress={(e) => {
+              // Prevent all keyboard events from bubbling to parent button
+              e.stopPropagation();
+              e.preventDefault();
+            }}
+          >
+            <AskGeminiButton captureId={item.id} variant="icon" />
+          </div>
+        </div>          <Badge variant="outline" className={cn("text-xs", statusColors[item.status])}>
+          {item.status}
+        </Badge>
       </div>
+
 
       {/* Summary */}
       {item.summary && (
@@ -142,8 +170,8 @@ export function CaptureListItem({ item, isSelected, onClick }: CaptureListItemPr
               className={cn(
                 "h-full rounded-full",
                 item.priorityScore >= 80 ? "bg-destructive" :
-                item.priorityScore >= 60 ? "bg-warning" :
-                "bg-accent"
+                  item.priorityScore >= 60 ? "bg-warning" :
+                    "bg-accent"
               )}
               style={{ width: `${item.priorityScore}%` }}
             />

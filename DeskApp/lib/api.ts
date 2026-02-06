@@ -1,3 +1,5 @@
+'use client';
+
 import type {
   CaptureItem,
   ThemeCluster,
@@ -8,6 +10,8 @@ import type {
   UserSettings,
   CaptureStatus,
 } from "@/types/lifeos";
+import { getInbox, getCaptureById } from './api-client';
+import { mapMemoryToCaptureItem } from './mappers';
 
 // Mock Data
 const mockCaptures: CaptureItem[] = [
@@ -371,15 +375,48 @@ let capturesState = [...mockCaptures];
 let notificationsState = [...mockNotifications];
 
 // API Functions
+// Replace the listCaptures function in lib/api.ts
+
+
+// API Functions
 export async function listCaptures(): Promise<CaptureItem[]> {
-  await delay(100);
-  return [...capturesState];
+  try {
+    console.log('📥 [API] Fetching captures from backend...');
+    
+    if (typeof window !== 'undefined') {
+      try {
+        const result = await getInbox({ limit: 50 });
+        console.log(`✅ [API] Got ${result.items.length} items from backend`);
+        return result.items.map(mapMemoryToCaptureItem);
+      } catch (error) {
+        console.error('❌ [API] Failed to fetch from backend:', error);
+        console.log('⚠️ [API] Falling back to mock data');
+        return mockCaptures;
+      }
+    }
+    
+    return mockCaptures;
+  } catch (error) {
+    console.error('❌ [API] Failed to fetch captures:', error);
+    return [];
+  }
 }
 
 export async function getCapture(id: string): Promise<CaptureItem | null> {
-  await delay(50);
-  return capturesState.find(c => c.id === id) || null;
+  try {
+    if (typeof window !== 'undefined') {
+      const result = await getCaptureById(id) as any;
+      if (result.success && result.capture) {
+        return mapMemoryToCaptureItem(result.capture);
+      }
+    }
+    return mockCaptures.find(c => c.id === id) || null;
+  } catch (error) {
+    console.error('❌ [API] Failed to get capture:', error);
+    return null;
+  }
 }
+
 
 export async function updateCapture(id: string, updates: Partial<CaptureItem>): Promise<CaptureItem | null> {
   await delay(100);

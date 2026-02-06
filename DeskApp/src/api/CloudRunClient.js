@@ -18,11 +18,10 @@
 const axios = require('axios');
 const TokenManager = require('../auth/TokenManager');
 
-// Backend URL - change this when backend is deployed to Cloud Run
-// For local development:https://lifeos-backend-1056690364460.us-central1.run.app
-// For production: https://lifeos-backend-xxxxx.run.app
-const BASE_URL = process.env.BACKEND_URL || 'https://lifeos-backend-1056690364460.us-central1.run.app';
+// Backend URL - reads from environment variable
+const BASE_URL = process.env.BACKEND_URL || 'http://127.0.0.1:8000';
 
+console.log('🌐 [CloudRunClient] Using backend:', BASE_URL);
 /**
  * Create axios instance with base configuration
  */
@@ -239,7 +238,68 @@ const CloudRunClient = {
       console.error('❌ Backend health check failed:', error.message);
       return false;
     }
+  },
+
+  /**
+ * Get inbox items (captures/memories)
+ * @param {object} params - { limit, filter_intent, filter_domain }
+ * @returns {Promise<array>} - Array of memory items
+ */
+async getInbox(params = {}) {
+  try {
+    const { limit = 50, filter_intent, filter_domain } = params;
+    
+    console.log('📥 [CloudRunClient] Fetching inbox from:', BASE_URL);
+    
+    const queryParams = new URLSearchParams();
+    if (limit) queryParams.append('limit', limit);
+    if (filter_intent) queryParams.append('filter_intent', filter_intent);
+    if (filter_domain) queryParams.append('filter_domain', filter_domain);
+    
+    const response = await apiClient.get(`/api/inbox?${queryParams}`);
+    
+    console.log(`✅ [CloudRunClient] Retrieved ${response.data.memories?.length || 0} items`);
+    
+    return {
+      success: true,
+      items: response.data.memories || [],
+      total: response.data.total || 0
+    };
+    
+  } catch (error) {
+    console.error('❌ [CloudRunClient] Failed to get inbox:', error.message);
+    
+    if (error.response?.status === 401) {
+      throw new Error('Unauthorized - please login again');
+    }
+    
+    throw new Error('Failed to retrieve inbox items');
   }
+},
+
+/**
+ * Get single capture by ID
+ * @param {string} captureId - Capture ID
+ * @returns {Promise<object>} - Capture details
+ */
+async getCaptureById(captureId) {
+  try {
+    console.log('📄 [CloudRunClient] Fetching capture:', captureId);
+    
+    const response = await apiClient.get(`/api/capture/${captureId}/full`);
+    
+    console.log('✅ [CloudRunClient] Capture retrieved');
+    
+    return {
+      success: true,
+      capture: response.data.capture
+    };
+    
+  } catch (error) {
+    console.error('❌ [CloudRunClient] Failed to get capture:', error.message);
+    throw new Error('Failed to retrieve capture details');
+  }
+}
 
 };
 

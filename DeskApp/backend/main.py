@@ -8,6 +8,7 @@ import uuid
 import json
 import asyncio
 from datetime import datetime, timezone
+from google.cloud import firestore
 from typing import Optional
 
 # 1. Standard FastAPI imports
@@ -20,6 +21,7 @@ from google import genai
 from auth import google_oauth, jwt_manager
 from models import user
 from models.database import init_database, get_connection
+import google.generativeai as genai
 
 # 3. Agentic Architecture Imports
 from agents.perception.capture_agent import PerceptionAgent
@@ -701,14 +703,64 @@ def get_item(item_id: str):
     return {"error": "Not implemented yet"}
 
 
+# @app.get("/api/inbox")
+# async def get_inbox(
+#     limit: int = 50,
+#     filter_intent: str = Query(None),
+#     filter_domain: str = Query(None),  # NEW: Filter by domain
+#     authorization: str = Header(None)
+# ):
+#     """Retrieves user's captured memories with AI insights (3-Layer Classification)"""
+    
+#     if not authorization or not authorization.startswith("Bearer "):
+#         raise HTTPException(status_code=401, detail="Unauthorized")
+    
+#     token = authorization.replace("Bearer ", "")
+#     payload = jwt_manager.verify_jwt_token(token)
+#     user_id = payload["user_id"]
+    
+#     try:
+#         db = FirestoreService()
+#         docs = db._get_user_ref(user_id).collection(settings.COLLECTION_MEMORIES).limit(limit).stream()
+        
+#         memories = []
+#         for doc in docs:
+#             memory_data = doc.to_dict()
+#             memory_data['id'] = doc.id
+            
+#             # Filter by intent (if specified)
+#             if filter_intent and memory_data.get('intent') != filter_intent:
+#                 continue
+            
+#             # Filter by domain (NEW - if specified)
+#             if filter_domain and memory_data.get('domain') != filter_domain:
+#                 continue
+            
+#             memories.append(memory_data)
+        
+#         return {
+#             "success": True,
+#             "memories": memories,
+#             "total": len(memories)
+#         }
+        
+#     except Exception as e:
+#         print(f"[ERROR] Inbox fetch failed: {e}")
+#         raise HTTPException(status_code=500, detail=str(e))
+
+
+
 @app.get("/api/inbox")
 async def get_inbox(
     limit: int = 50,
     filter_intent: str = Query(None),
-    filter_domain: str = Query(None),  # NEW: Filter by domain
+    filter_domain: str = Query(None),
     authorization: str = Header(None)
 ):
-    """Retrieves user's captured memories with AI insights (3-Layer Classification)"""
+    """
+    Retrieves user's captured memories with screenshots
+    Returns enriched data with screenshot URLs from GCS
+    """
     
     if not authorization or not authorization.startswith("Bearer "):
         raise HTTPException(status_code=401, detail="Unauthorized")
@@ -717,9 +769,19 @@ async def get_inbox(
     payload = jwt_manager.verify_jwt_token(token)
     user_id = payload["user_id"]
     
+    print(f"[API] Inbox request for user: {user_id}")
+    
     try:
         db = FirestoreService()
-        docs = db._get_user_ref(user_id).collection(settings.COLLECTION_MEMORIES).limit(limit).stream()
+        
+        # Get memories from Firestore
+        docs = (
+            db._get_user_ref(user_id)
+            .collection(settings.COLLECTION_MEMORIES)
+            .order_by("created_at", direction=firestore.Query.DESCENDING)
+            .limit(limit)
+            .stream()
+        )
         
         memories = []
         for doc in docs:
@@ -730,11 +792,44 @@ async def get_inbox(
             if filter_intent and memory_data.get('intent') != filter_intent:
                 continue
             
-            # Filter by domain (NEW - if specified)
+            # Filter by domain (if specified)
             if filter_domain and memory_data.get('domain') != filter_domain:
                 continue
             
+            # Get comprehensive capture to fetch screenshot URL
+            capture_ref = memory_data.get('capture_ref')
+            if capture_ref:
+                try:
+                    comp_doc = (
+                        db._get_user_ref(user_id)
+                        .collection("comprehensive_captures")
+                        .document(capture_ref)
+                        .get()
+                    )
+                    
+                    if comp_doc.exists:
+                        comp_data = comp_doc.to_dict()
+                        input_data = comp_data.get('input', {})
+                        
+                        # Add screenshot URL to memory
+                        screenshot_path = input_data.get('screenshot_path')
+                        if screenshot_path:
+                            # Build GCS public URL
+                            bucket_name = os.getenv('GCS_BUCKET', 'rag-gcs-bucket')
+                            memory_data['screenshot_url'] = f"https://storage.googleapis.com/{bucket_name}/{screenshot_path}"
+                        
+                        # Add window context
+                        context = input_data.get('context', {})
+                        memory_data['source_app'] = context.get('app_name', 'Unknown')
+                        memory_data['window_title'] = context.get('window_title', '')
+                        memory_data['url'] = context.get('url')
+                        
+                except Exception as e:
+                    print(f"[WARNING] Could not fetch comprehensive capture for {capture_ref}: {e}")
+            
             memories.append(memory_data)
+        
+        print(f"[API] Returning {len(memories)} memories")
         
         return {
             "success": True,
@@ -745,8 +840,7 @@ async def get_inbox(
     except Exception as e:
         print(f"[ERROR] Inbox fetch failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))
-
-
+    
 # ============================================
 # COMPREHENSIVE CAPTURE ENDPOINTS
 # ============================================
@@ -2592,13 +2686,51 @@ async def semantic_search(
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
 
-@app.post("/api/ask")
-async def ask_question(
+# @app.post("/api/ask")
+# async def ask_question(
+#     question: str = Form(...),
+#     filter_domain: Optional[str] = Form(None),
+#     authorization: str = Header(None)
+# ):
+#     """RAG endpoint - Returns AI-generated answer with sources"""
+    
+#     if not authorization or not authorization.startswith("Bearer "):
+#         raise HTTPException(status_code=401, detail="Unauthorized")
+    
+#     token = authorization.replace("Bearer ", "")
+#     payload = jwt_manager.verify_jwt_token(token)
+#     user_id = payload["user_id"]
+    
+#     try:
+#         result = rag_service.answer_question(
+#             query=question,
+#             user_id=user_id,
+#             num_results=5,
+#             filter_domain=filter_domain
+#         )
+        
+#         return {
+#             "success": True,
+#             "question": question,
+#             "answer": result['answer'],
+#             "sources": result['sources'],
+#             "confidence": result['confidence']
+#         }
+        
+#     except Exception as e:
+#         print(f"[API] Ask question failed: {e}")
+#         import traceback
+#         traceback.print_exc()
+#         raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/inbox/{capture_id}/ask")
+async def ask_about_capture(
+    capture_id: str,
     question: str = Form(...),
-    filter_domain: Optional[str] = Form(None),
     authorization: str = Header(None)
 ):
-    """RAG endpoint - Returns AI-generated answer with sources"""
+    """Ask Gemini a question about a specific capture"""
     
     if not authorization or not authorization.startswith("Bearer "):
         raise HTTPException(status_code=401, detail="Unauthorized")
@@ -2608,28 +2740,83 @@ async def ask_question(
     user_id = payload["user_id"]
     
     try:
-        result = rag_service.answer_question(
-            query=question,
-            user_id=user_id,
-            num_results=5,
-            filter_domain=filter_domain
-        )
+        print(f"[ASK API] Question about capture {capture_id}: '{question}'")
+        
+        # Get the specific capture
+        db = FirestoreService()
+        memory_doc = db._get_user_ref(user_id).collection(settings.COLLECTION_MEMORIES).document(capture_id).get()
+        
+        if not memory_doc.exists:
+            raise HTTPException(status_code=404, detail="Capture not found")
+        
+        memory_data = memory_doc.to_dict()
+        
+        # Build context from this specific capture
+        context = f"""Title: {memory_data.get('title', 'Untitled')}
+Summary: {memory_data.get('one_line_summary', '')}
+Full Content: {memory_data.get('full_transcript', '')}
+Domain: {memory_data.get('domain', 'unknown')}
+Intent: {memory_data.get('intent', 'unknown')}
+Tags: {', '.join(memory_data.get('tags', []))}"""
+        
+        # Generate answer using Gemini
+        import google.generativeai as genai
+        genai.configure(api_key=settings.GOOGLE_API_KEY)
+        model = genai.GenerativeModel('gemini-3-flash-preview')
+        
+        prompt = f"""You are an intelligent assistant helping users find information about their captured items.
+
+CAPTURED ITEM:
+• Title: {memory_data.get('title', 'Untitled')}
+• Summary: {memory_data.get('one_line_summary', '')}
+• Content: {memory_data.get('full_transcript', '')}
+• Domain: {memory_data.get('domain', 'unknown')}
+• Intent: {memory_data.get('intent', 'unknown')}
+• Tags: {', '.join(memory_data.get('tags', []))}
+
+QUESTION: {question}
+
+INSTRUCTIONS:
+1. Answer based on the captured content and your knowledge
+2. Provide a BRIEF, well-formatted response (2-4 sentences max)
+3. Use citations: [From Capture], [General Knowledge]
+4. Format cleanly with sections (ANSWER, DETAILS, NOTES)
+5. NO EMOJIS - Professional formatting only
+
+FORMAT:
+ANSWER:
+[Direct answer]
+
+DETAILS:
+• [Key detail 1] [Citation]
+• [Key detail 2] [Citation]
+
+NOTES:
+[Additional context if needed]
+
+Response:"""
+        
+        response = model.generate_content(prompt)
+        answer = response.text.strip()
+        
+        print(f"[ASK API] Answer generated: {answer[:100]}...")
         
         return {
             "success": True,
             "question": question,
-            "answer": result['answer'],
-            "sources": result['sources'],
-            "confidence": result['confidence']
+            "answer": answer,
+            "capture_id": capture_id,
+            "capture_title": memory_data.get('title', 'Untitled')
         }
         
+    except HTTPException:
+        raise
     except Exception as e:
-        print(f"[API] Ask question failed: {e}")
+        print(f"[ASK API] Failed: {e}")
         import traceback
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
-
-
+    
 @app.post("/api/ask/no-auth")
 async def ask_no_auth(
     question: str = Form(...),
@@ -2658,13 +2845,31 @@ async def ask_no_auth(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+# if __name__ == "__main__":
+#     import uvicorn
+#     print("[STARTUP] LifeOS Multi-Agent System v2.0")
+#     print("[STARTUP] 3-Layer Universal Classification System")
+#     print("[STARTUP] Domains: 12 | Context Types: 19 | Intents: 14")
+#     print("[STARTUP] API running athttps://lifeos-backend-1056690364460.us-central1.run.app")
+#     port = int(os.getenv("PORT", "3001"))
+#     uvicorn.run(app, host="0.0.0.0", port=port)
+
+
 if __name__ == "__main__":
     import uvicorn
     print("[STARTUP] LifeOS Multi-Agent System v2.0")
     print("[STARTUP] 3-Layer Universal Classification System")
     print("[STARTUP] Domains: 12 | Context Types: 19 | Intents: 14")
-    print("[STARTUP] API running athttps://lifeos-backend-1056690364460.us-central1.run.app")
-    port = int(os.getenv("PORT", "3001"))
-    uvicorn.run(app, host="0.0.0.0", port=port)
-
-
+    
+    # Dynamic port and host info
+    port = int(os.getenv("PORT", "8000"))  # Changed default to 8000
+    host = "0.0.0.0"
+    
+    # Determine environment
+    env = os.getenv("ENV", "local")
+    if env == "cloud":
+        print(f"[STARTUP] API running on Cloud Run (port {port})")
+    else:
+        print(f"[STARTUP] API running locally at http://localhost:{port}")
+    
+    uvicorn.run(app, host=host, port=port)
