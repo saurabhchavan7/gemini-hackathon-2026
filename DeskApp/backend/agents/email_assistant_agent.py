@@ -24,7 +24,8 @@ class DraftEmail(BaseModel):
     tone: str
 
 class EmailAssistantAgent(AgentBase):
-    def __init__(self):
+    def __init__(self, user_id: str):
+        self.user_id = user_id
         system_instruction = (
             "You are an intelligent email assistant. Your role is to help users manage their inbox "
             "by identifying emails that need replies and drafting appropriate responses.\n\n"
@@ -198,6 +199,9 @@ class EmailAssistantAgent(AgentBase):
             print("=" * 60)
             
             gmail_service = GmailService(self.user_id)
+            
+            # IMPORTANT: Initialize the service first
+            await gmail_service.initialize()
             
             print("[Agent 9] Step 1: Fetching emails from last 48 hours")
             emails = gmail_service.get_yesterdays_emails(max_results=max_emails)
