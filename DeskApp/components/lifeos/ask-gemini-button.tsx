@@ -53,9 +53,10 @@ export function AskGeminiButton({ captureId, variant = "button" }: AskGeminiButt
             e.preventDefault();
             setIsOpen(true);
           }}
-          className="gap-1"
+          className="gap-1 p-2 hover:bg-blue-500/10 rounded-lg transition-colors"
+          title="Ask Gemini"
         >
-          <Sparkles className="h-4 w-4" />
+          <Sparkles className="h-5 w-5 text-blue-500" />
         </Button>
 
         {isOpen && (
