@@ -18,11 +18,10 @@
 const axios = require('axios');
 const TokenManager = require('../auth/TokenManager');
 
-// Backend URL - change this when backend is deployed to Cloud Run
-// For local development:https://lifeos-backend-1056690364460.us-central1.run.app
-// For production: https://lifeos-backend-xxxxx.run.app
-const BASE_URL = process.env.BACKEND_URL || 'https://lifeos-backend-1056690364460.us-central1.run.app';
+// Backend URL - reads from environment variable
+const BASE_URL = process.env.BACKEND_URL || 'http://127.0.0.1:8000';
 
+console.log('🌐 [CloudRunClient] Using backend:', BASE_URL);
 /**
  * Create axios instance with base configuration
  */
@@ -239,7 +238,167 @@ const CloudRunClient = {
       console.error('❌ Backend health check failed:', error.message);
       return false;
     }
+  },
+
+  /**
+ * Get inbox items (captures/memories)
+ * @param {object} params - { limit, filter_intent, filter_domain }
+ * @returns {Promise<array>} - Array of memory items
+ */
+async getInbox(params = {}) {
+  try {
+    const { limit = 50, filter_intent, filter_domain } = params;
+    
+    console.log('📥 [CloudRunClient] Fetching inbox from:', BASE_URL);
+    
+    const queryParams = new URLSearchParams();
+    if (limit) queryParams.append('limit', limit);
+    if (filter_intent) queryParams.append('filter_intent', filter_intent);
+    if (filter_domain) queryParams.append('filter_domain', filter_domain);
+    
+    const response = await apiClient.get(`/api/inbox?${queryParams}`);
+    
+    console.log(`✅ [CloudRunClient] Retrieved ${response.data.memories?.length || 0} items`);
+    
+    return {
+      success: true,
+      items: response.data.memories || [],
+      total: response.data.total || 0
+    };
+    
+  } catch (error) {
+    console.error('❌ [CloudRunClient] Failed to get inbox:', error.message);
+    
+    if (error.response?.status === 401) {
+      throw new Error('Unauthorized - please login again');
+    }
+    
+    throw new Error('Failed to retrieve inbox items');
   }
+},
+
+/**
+ * Get single capture by ID
+ * @param {string} captureId - Capture ID
+ * @returns {Promise<object>} - Capture details
+ */
+async getCaptureById(captureId) {
+  try {
+    console.log('📄 [CloudRunClient] Fetching capture:', captureId);
+    
+    const response = await apiClient.get(`/api/capture/${captureId}/full`);
+    
+    console.log('✅ [CloudRunClient] Capture retrieved');
+    
+    return {
+      success: true,
+      capture: response.data.capture
+    };
+    
+  } catch (error) {
+    console.error('❌ [CloudRunClient] Failed to get capture:', error.message);
+    throw new Error('Failed to retrieve capture details');
+  }
+},
+
+async getCollections() {
+  try {
+    console.log('📁 [CloudRunClient] Fetching collections');
+    
+    const response = await apiClient.get('/api/collections');
+    
+    console.log(`✅ [CloudRunClient] Retrieved ${response.data.collections?.length || 0} collections`);
+    
+    return {
+      success: true,
+      collections: response.data.collections || [],
+      total: response.data.total || 0
+    };
+    
+  } catch (error) {
+    console.error('❌ [CloudRunClient] Failed to get collections:', error.message);
+    throw new Error('Failed to retrieve collections');
+  }
+},
+
+async getThemeClusters(numClusters = 4) {
+  try {
+    console.log('🎨 [CloudRunClient] Fetching theme clusters');
+    
+    const response = await apiClient.get(`/api/synthesis/clusters?num_clusters=${numClusters}`);
+    
+    console.log(`✅ [CloudRunClient] Retrieved ${response.data.clusters?.length || 0} clusters`);
+    
+    return {
+      success: true,
+      clusters: response.data.clusters || [],
+      total: response.data.total || 0,
+      message: response.data.message
+    };
+    
+  } catch (error) {
+    console.error('❌ [CloudRunClient] Failed to get theme clusters:', error.message);
+    throw new Error('Failed to retrieve theme clusters');
+  }
+},
+
+async askQuestion(question, filterDomain = null, token = null) {
+  try {
+    console.log('🤔 [CloudRunClient] Asking question:', question);
+    
+    if (!token) {
+      throw new Error('Not authenticated');
+    }
+    
+    const FormData = require('form-data');
+    const form = new FormData();
+    form.append('question', question);
+    if (filterDomain) {
+      form.append('filter_domain', filterDomain);
+    }
+    
+    const response = await apiClient.post('/api/ask', form, {
+      headers: {
+        ...form.getHeaders(),
+        'Authorization': `Bearer ${token}`
+      }
+    });
+    
+    console.log('✅ [CloudRunClient] Got answer');
+    
+    return {
+      success: true,
+      question: response.data.question,
+      answer: response.data.answer,
+      sources: response.data.sources || [],
+      confidence: response.data.confidence || 'medium'
+    };
+    
+  } catch (error) {
+    console.error('❌ [CloudRunClient] Failed to ask question:', error.message);
+    throw new Error('Failed to get answer');
+  }
+},
+
+async getProactiveNotifications() {
+  try {
+    console.log('🔔 [CloudRunClient] Fetching proactive notifications');
+    
+    const response = await apiClient.get('/api/notifications/proactive');
+    
+    console.log(`✅ [CloudRunClient] Got ${response.data.notifications?.length || 0} notifications`);
+    
+    return {
+      success: true,
+      notifications: response.data.notifications || [],
+      count: response.data.count || 0
+    };
+    
+  } catch (error) {
+    console.error('❌ [CloudRunClient] Failed to get notifications:', error.message);
+    return { success: false, notifications: [], count: 0 };
+  }
+},
 
 };
 

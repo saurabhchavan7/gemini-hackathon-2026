@@ -3,9 +3,28 @@
  * No duplicates, clean structure
  */
 
+const getBackendUrl = () => {
+  // This will be injected from main process
+  console.log('Backend URL from env:', process.env.BACKEND_URL);
+  return process.env.BACKEND_URL;
+};
 const { contextBridge, ipcRenderer } = require('electron');
 
 contextBridge.exposeInMainWorld('electronAPI', {
+
+  apiGetCollections: () => ipcRenderer.invoke('api-get-collections'),
+
+  apiGetThemeClusters: (numClusters) => 
+  ipcRenderer.invoke('api-get-theme-clusters', numClusters),
+
+  apiAskQuestion: (question, filterDomain) => 
+  ipcRenderer.invoke('api-ask-question', question, filterDomain),
+
+  onProactiveNotificationData: (callback) =>
+  ipcRenderer.on('proactive-notification-data', (_, data) => callback(data)),
+  
+  apiAskCapture: (captureId, question) => 
+  ipcRenderer.invoke('api-ask-capture', captureId, question),
 
   // CAPTURE APIs
   getAuthToken: () => ipcRenderer.invoke('get-auth-token'),
@@ -68,32 +87,62 @@ onAudioNoteData: (callback) =>
    * @param {Object} opts - { path, name, size, type }
    * @returns {Promise<Object>} - { success, ... }
    */
+  // uploadFileToBackend: async (opts) => {
+
+  //   // Read file as buffer from main process
+  //   const buffer = await ipcRenderer.invoke('read-file-buffer', opts.path);
+  //   if (!buffer) return { success: false, error: 'Failed to read file' };
+  //   // Get JWT token
+  //   const token = await ipcRenderer.invoke('get-auth-token');
+  //   if (!token) return { success: false, error: 'Not authenticated' };
+  //   // Prepare FormData
+  //   const formData = new FormData();
+  //   const file = new File([buffer], opts.name, { type: opts.type });
+  //   formData.append('file', file);
+  //   // Optionally add capture_id if needed
+  //   // formData.append('capture_id', ...);
+  //   // Send to backend
+  //   try {
+  //     const res = await fetch('https://lifeos-backend-1056690364460.us-central1.run.app/api/upload-file', {
+  //       method: 'POST',
+  //       headers: { 'Authorization': `Bearer ${token}` },
+  //       body: formData
+  //     });
+  //     const data = await res.json();
+  //     return data;
+  //   } catch (err) {
+  //     return { success: false, error: err.message };
+  //   }
+  // },
+
+
   uploadFileToBackend: async (opts) => {
-    // Read file as buffer from main process
-    const buffer = await ipcRenderer.invoke('read-file-buffer', opts.path);
-    if (!buffer) return { success: false, error: 'Failed to read file' };
-    // Get JWT token
-    const token = await ipcRenderer.invoke('get-auth-token');
-    if (!token) return { success: false, error: 'Not authenticated' };
-    // Prepare FormData
-    const formData = new FormData();
-    const file = new File([buffer], opts.name, { type: opts.type });
-    formData.append('file', file);
-    // Optionally add capture_id if needed
-    // formData.append('capture_id', ...);
-    // Send to backend
-    try {
-      const res = await fetch('https://lifeos-backend-1056690364460.us-central1.run.app/api/upload-file', {
-        method: 'POST',
-        headers: { 'Authorization': `Bearer ${token}` },
-        body: formData
-      });
-      const data = await res.json();
-      return data;
-    } catch (err) {
-      return { success: false, error: err.message };
-    }
-  },
+  const buffer = await ipcRenderer.invoke('read-file-buffer', opts.path);
+  if (!buffer) return { success: false, error: 'Failed to read file' };
+  
+  const token = await ipcRenderer.invoke('get-auth-token');
+  if (!token) return { success: false, error: 'Not authenticated' };
+  
+  const formData = new FormData();
+  const file = new File([buffer], opts.name, { type: opts.type });
+  formData.append('file', file);
+  
+  const backendUrl = getBackendUrl();
+  console.log('📤 [PRELOAD] Uploading file to:', backendUrl);
+  
+  try {
+    const res = await fetch(`${backendUrl}/api/upload-file`, {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${token}` },
+      body: formData
+    });
+    const data = await res.json();
+    return data;
+  } catch (err) {
+    console.error('❌ [PRELOAD] Upload failed:', err);
+    return { success: false, error: err.message };
+  }
+},
 
   // AUTH APIs
   googleLogin: async () => {
@@ -139,6 +188,9 @@ onAudioNoteData: (callback) =>
       return { isAuthenticated: false, user: null };
     }
   },
+
+  apiGetInbox: (params) => ipcRenderer.invoke('api-get-inbox', params),
+  apiGetCaptureById: (captureId) => ipcRenderer.invoke('api-get-capture', captureId),
 
   // PLATFORM INFO
   platform: process.platform,

@@ -4,6 +4,7 @@ from google.cloud import aiplatform
 from google.cloud.aiplatform.matching_engine.matching_engine_index_endpoint import Namespace
 from vertexai.language_models import TextEmbeddingModel
 from core.config import settings
+from services.embedding_service import EmbeddingService
 
 class VectorSearchService:
     
@@ -13,6 +14,9 @@ class VectorSearchService:
         self.index_endpoint_id = settings.VERTEX_INDEX_ENDPOINT_ID
         self.deployed_index_id = settings.VERTEX_DEPLOYED_INDEX_ID
 
+        # Initialize embedding service
+        self.embedding_service = EmbeddingService()
+
         if not self.project_id:
             raise ValueError("[VECTOR_SEARCH] Missing GCP_PROJECT_ID; set it in the environment.")
         if not self.index_endpoint_id or not self.deployed_index_id:
@@ -21,6 +25,18 @@ class VectorSearchService:
                 "set VERTEX_INDEX_ENDPOINT_ID and VERTEX_DEPLOYED_INDEX_ID."
             )
         
+        # Initialize AI Platform
+        aiplatform.init(project=self.project_id, location=self.region)
+        
+        # Use full resource name format
+        endpoint_resource_name = f"projects/{self.project_id}/locations/{self.region}/indexEndpoints/{self.index_endpoint_id}"
+        
+        self.index_endpoint = aiplatform.MatchingEngineIndexEndpoint(
+            index_endpoint_name=endpoint_resource_name
+        )
+        
+        print(f"[VECTOR_SEARCH] Initialized for project: {self.project_id}")
+        print(f"[VECTOR_SEARCH] Using endpoint: {self.index_endpoint_id}")
 
     def search(
         self,
@@ -33,7 +49,9 @@ class VectorSearchService:
         
         try:
             print(f"[VECTOR_SEARCH] Query: '{query}'")
-            query_embedding = self.embedding_model.get_embeddings([query])[0].values
+            
+            # Use embedding service to generate query embedding
+            query_embedding = self.embedding_service.get_embeddings([query])[0]
             
             restricts = [
                 Namespace(name="user_id", allow_tokens=[user_id], deny_tokens=[])

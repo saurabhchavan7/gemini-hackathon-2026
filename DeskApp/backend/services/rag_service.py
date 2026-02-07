@@ -147,7 +147,7 @@ Answer:"""
             import time
             
             genai.configure(api_key=settings.GOOGLE_API_KEY)
-            model = genai.GenerativeModel('gemini-2.0-flash-exp')
+            model = genai.GenerativeModel('gemini-3-flash-preview')
             
             # Retry logic for rate limits
             max_retries = 2

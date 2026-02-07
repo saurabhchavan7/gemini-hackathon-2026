@@ -7,6 +7,8 @@ import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { updateCapture } from "@/lib/api";
 import type { CaptureItem, CaptureStatus } from "@/types/lifeos";
+import { AskGeminiButton } from "./ask-gemini-button";
+
 
 interface DetailDrawerProps {
   item: CaptureItem | null;
@@ -79,6 +81,8 @@ export function DetailDrawer({ item, isOpen, onClose, onUpdate }: DetailDrawerPr
       >
         {/* Header */}
         <header className="flex items-center justify-between border-b border-border p-4">
+          <AskGeminiButton captureId={item.id} variant="button" />
+
           <h2 id="drawer-title" className="text-lg font-semibold text-foreground">
             Capture Details
           </h2>
