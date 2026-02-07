@@ -18,17 +18,31 @@ class GmailService:
         self.db = FirestoreService()
         self.gmail_service = None
     
-    def _get_service(self):
-        """Lazy load Gmail service"""
+    async def _get_service_async(self):
+        """Get Gmail service asynchronously"""
         if not self.gmail_service:
-            self.gmail_service = self.auth_service.get_gmail_service()
+            self.gmail_service = await self.auth_service.get_gmail_service()
         return self.gmail_service
     
     def get_yesterdays_emails(self, max_results: int = 20, include_today: bool = True) -> List[Dict]:
         """Fetch emails from yesterday and optionally today"""
         
         try:
-            service = self._get_service()
+            # Get service synchronously (will be called from async context)
+            import asyncio
+            loop = asyncio.get_event_loop()
+            
+            # Check if we're already in an async context
+            if loop.is_running():
+                # We're in async context, we need to handle this differently
+                print("[GMAIL] Running in async context, using existing service")
+                if not self.gmail_service:
+                    print("[GMAIL ERROR] Service not initialized - this should be called after async init")
+                    return []
+                service = self.gmail_service
+            else:
+                # We're in sync context
+                service = loop.run_until_complete(self._get_service_async())
             
             now = datetime.now()
             
@@ -62,7 +76,7 @@ class GmailService:
             
             emails = []
             for msg in messages:
-                email_data = self._get_email_details(msg['id'])
+                email_data = self._get_email_details(msg['id'], service)
                 if email_data:
                     emails.append(email_data)
             
@@ -70,13 +84,16 @@ class GmailService:
             
         except Exception as e:
             print(f"[ERROR] Failed to fetch emails: {e}")
+            import traceback
+            traceback.print_exc()
             return []
     
-    def _get_email_details(self, message_id: str) -> Optional[Dict]:
+    def _get_email_details(self, message_id: str, service=None) -> Optional[Dict]:
         """Get full details of an email"""
         
         try:
-            service = self._get_service()
+            if not service:
+                service = self.gmail_service
             
             message = service.users().messages().get(
                 userId='me',
@@ -140,7 +157,10 @@ class GmailService:
         """Check if user already replied in this thread"""
         
         try:
-            service = self._get_service()
+            service = self.gmail_service
+            if not service:
+                print("[WARNING] Gmail service not initialized")
+                return False
             
             thread = service.users().threads().get(
                 userId='me',
@@ -169,7 +189,12 @@ class GmailService:
         """Create a draft email in Gmail"""
         
         try:
-            service = self._get_service()
+            service = self.gmail_service
+            if not service:
+                return {
+                    "status": "error",
+                    "message": "Gmail service not initialized"
+                }
             
             message_text = f"To: {to_email}\nSubject: {subject}\n\n{body}"
             message_bytes = message_text.encode('utf-8')
@@ -205,3 +230,8 @@ class GmailService:
                 "status": "error",
                 "message": str(e)
             }
+    
+    async def initialize(self):
+        """Initialize Gmail service - call this before using other methods"""
+        self.gmail_service = await self._get_service_async()
+        print(f"[GMAIL] Service initialized for user {self.user_id}")
