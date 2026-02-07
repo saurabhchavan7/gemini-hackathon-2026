@@ -113,41 +113,162 @@ class LoginResponse(BaseModel):
     token: str
     user: dict
 
-@app.post("/auth/google/login")
-async def google_login(request: LoginRequest):
-    """Handle Google OAuth login"""
+
+
+# ============================================
+# STEP 2: ADD EMAIL INTELLIGENCE ENDPOINTS
+# Add these endpoints BEFORE the if __name__ == "__main__" section
+# ============================================
+
+# Email Intelligence Endpoints
+@app.post("/api/email-intelligence/check")
+async def check_emails_scheduled(authorization: str = Header(None)):
+    """
+    Scheduled endpoint for Cloud Scheduler
+    Checks emails for all users (or specific user if authorized)
+    """
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    
+    token = authorization.replace("Bearer ", "")
+    payload = jwt_manager.verify_jwt_token(token)
+    user_id = payload["user_id"]
+    
     try:
-        print("[AUTH] Login request received")
+        from agents.email_assistant_agent import EmailAssistantAgent
+        from services.token_service import TokenService
         
-        user_info = google_oauth.authenticate_user(request.code)
-        user_data = user.create_or_update_user(
-            user_id=user_info["user_id"],
-            email=user_info["email"],
-            name=user_info["name"],
-            picture=user_info["picture"]
-        )
+        token_service = TokenService()
+        has_gmail = await token_service.check_gmail_connected(user_id)
         
-        jwt_token = jwt_manager.create_jwt_token(
-            user_id=user_data["user_id"],
-            email=user_data["email"]
-        )
-        
-        response = {
-            "token": jwt_token,
-            "user": {
-                "user_id": user_data["user_id"],
-                "email": user_data["email"],
-                "name": user_data["name"],
-                "picture": user_data["picture"]
+        if not has_gmail:
+            return {
+                "status": "skip",
+                "message": "User has not connected Gmail",
+                "user_id": user_id
             }
+        
+        agent = EmailAssistantAgent(user_id=user_id)
+        result = await agent.process_yesterdays_emails(max_emails=20)
+        
+        return {
+            "status": "success",
+            "user_id": user_id,
+            "result": result
         }
         
-        print(f"[AUTH] Login successful: {user_data['email']}")
-        return response
+    except Exception as e:
+        print(f"[ERROR] Scheduled email check failed: {e}")
+        return {
+            "status": "error",
+            "message": str(e),
+            "user_id": user_id
+        }
+
+
+@app.post("/api/email-intelligence/manual")
+async def check_emails_manual(authorization: str = Header(None)):
+    """Manual trigger for email checking by user"""
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    
+    token = authorization.replace("Bearer ", "")
+    payload = jwt_manager.verify_jwt_token(token)
+    user_id = payload["user_id"]
+    
+    try:
+        from agents.email_assistant_agent import EmailAssistantAgent
+        from services.token_service import TokenService
+        
+        token_service = TokenService()
+        has_gmail = await token_service.check_gmail_connected(user_id)
+        
+        if not has_gmail:
+            raise HTTPException(
+                status_code=403,
+                detail="Gmail not connected. Please log out and log in again to grant Gmail access."
+            )
+        
+        agent = EmailAssistantAgent(user_id=user_id)
+        result = await agent.process_yesterdays_emails(max_emails=20)
+        
+        return result
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"[ERROR] Manual email check failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/email-intelligence/status")
+async def get_email_status(authorization: str = Header(None)):
+    """Check if user has Gmail connected"""
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    
+    token = authorization.replace("Bearer ", "")
+    payload = jwt_manager.verify_jwt_token(token)
+    user_id = payload["user_id"]
+    
+    try:
+        from services.token_service import TokenService
+        
+        token_service = TokenService()
+        has_gmail = await token_service.check_gmail_connected(user_id)
+        
+        return {
+            "success": True,
+            "gmail_connected": has_gmail,
+            "user_id": user_id
+        }
         
     except Exception as e:
-        print(f"[ERROR] Login failed: {e}")
-        raise HTTPException(status_code=400, detail=f"Login failed: {str(e)}")
+        print(f"[ERROR] Status check failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/email-intelligence/drafts")
+async def get_email_drafts(
+    limit: int = Query(20, ge=1, le=100),
+    status: str = Query("pending"),
+    authorization: str = Header(None)
+):
+    """Get AI-generated email drafts for user"""
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    
+    token = authorization.replace("Bearer ", "")
+    payload = jwt_manager.verify_jwt_token(token)
+    user_id = payload["user_id"]
+    
+    try:
+        db = FirestoreService()
+        from google.cloud import firestore as firestore_module
+        
+        query = db._get_user_ref(user_id).collection("email_drafts")
+        
+        if status:
+            query = query.where("status", "==", status)
+        
+        docs = query.order_by("created_at", direction=firestore_module.Query.DESCENDING).limit(limit).stream()
+        
+        drafts = []
+        for doc in docs:
+            draft_data = doc.to_dict()
+            draft_data['id'] = doc.id
+            drafts.append(draft_data)
+        
+        return {
+            "success": True,
+            "drafts": drafts,
+            "total": len(drafts)
+        }
+        
+    except Exception as e:
+        print(f"[ERROR] Failed to fetch drafts: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 
 
 @app.get("/api/user/me")
@@ -2845,14 +2966,146 @@ async def ask_no_auth(
         raise HTTPException(status_code=500, detail=str(e))
 
 
-# if __name__ == "__main__":
-#     import uvicorn
-#     print("[STARTUP] LifeOS Multi-Agent System v2.0")
-#     print("[STARTUP] 3-Layer Universal Classification System")
-#     print("[STARTUP] Domains: 12 | Context Types: 19 | Intents: 14")
-#     print("[STARTUP] API running athttps://lifeos-backend-1056690364460.us-central1.run.app")
-#     port = int(os.getenv("PORT", "3001"))
-#     uvicorn.run(app, host="0.0.0.0", port=port)
+@app.post("/auth/google/login")
+async def google_login(request: LoginRequest):
+    """Handle Google OAuth login and save tokens"""
+    try:
+        print("[AUTH] Login request received")
+        
+        user_info = google_oauth.authenticate_user(request.code)
+        
+        # Save to SQLite (existing)
+        user_data = user.create_or_update_user(
+            user_id=user_info["user_id"],
+            email=user_info["email"],
+            name=user_info["name"],
+            picture=user_info["picture"]
+        )
+        
+        # CRITICAL: Also save to Firestore
+        db = FirestoreService()
+        user_doc_ref = db._get_user_ref(user_data["user_id"])
+        user_doc_ref.set({
+            "user_id": user_data["user_id"],
+            "email": user_data["email"],
+            "name": user_data["name"],
+            "picture": user_data["picture"],
+            "created_at": datetime.utcnow().isoformat(),
+            "last_login": datetime.utcnow().isoformat()
+        }, merge=True)
+        
+        print(f"[AUTH] User saved to Firestore: {user_data['email']}")
+        
+        # Save Google OAuth tokens to Firestore
+        tokens_saved = await google_oauth.save_tokens_to_firestore(
+            user_id=user_data["user_id"],
+            tokens={
+                "access_token": user_info.get("access_token"),
+                "refresh_token": user_info.get("refresh_token"),
+                "expires_in": 3600
+            }
+        )
+        
+        if tokens_saved:
+            print(f"[AUTH] Google tokens saved to Firestore")
+        else:
+            print(f"[WARNING] Failed to save Google tokens")
+        
+        jwt_token = jwt_manager.create_jwt_token(
+            user_id=user_data["user_id"],
+            email=user_data["email"]
+        )
+        
+        response = {
+            "token": jwt_token,
+            "user": {
+                "user_id": user_data["user_id"],
+                "email": user_data["email"],
+                "name": user_data["name"],
+                "picture": user_data["picture"]
+            }
+        }
+        
+        print(f"[AUTH] Login successful: {user_data['email']}")
+        return response
+        
+    except Exception as e:
+        print(f"[ERROR] Login failed: {e}")
+        raise HTTPException(status_code=400, detail=f"Login failed: {str(e)}")
+
+# ============================================
+# MASTER SCHEDULER ENDPOINT (ALL USERS)
+# ============================================
+
+@app.post("/api/email-intelligence/check-all")
+async def check_emails_all_users():
+    """Master scheduler endpoint - checks ALL users"""
+    
+    print("[MASTER SCHEDULER] Starting check for all users")
+    
+    try:
+        from services.token_service import TokenService
+        from agents.email_assistant_agent import EmailAssistantAgent
+        
+        db = FirestoreService()
+        token_service = TokenService()
+        
+        # Get all users
+        users_ref = db.db.collection("users").stream()
+        
+        all_users = []
+        users_with_tokens = []
+        
+        for user_doc in users_ref:
+            user_id = user_doc.id
+            all_users.append(user_id)
+            print(f"[MASTER SCHEDULER] Found user: {user_id}")
+            
+            # Check if user has Gmail tokens
+            token_doc = db._get_user_ref(user_id).collection("google_tokens").document("gmail").get()
+            
+            if token_doc.exists:
+                token_data = token_doc.to_dict()
+                if token_data.get("access_token") and token_data.get("refresh_token"):
+                    users_with_tokens.append(user_id)
+                    print(f"[MASTER SCHEDULER] ✓ User {user_id} has Gmail tokens")
+        
+        print(f"[MASTER SCHEDULER] Total users: {len(all_users)}, With Gmail: {len(users_with_tokens)}")
+        
+        # Process each user
+        results = []
+        for user_id in users_with_tokens:
+            try:
+                print(f"[MASTER SCHEDULER] Processing user: {user_id}")
+                
+                agent = EmailAssistantAgent(user_id=user_id)
+                result = await agent.process_yesterdays_emails(max_emails=20)
+                
+                results.append({
+                    "user_id": user_id,
+                    "status": "success",
+                    "drafts_created": result.get('drafts_created', 0)
+                })
+                
+                print(f"[MASTER SCHEDULER] ✓ User {user_id}: {result.get('drafts_created', 0)} drafts")
+                
+            except Exception as e:
+                print(f"[ERROR] Failed for user {user_id}: {e}")
+                results.append({"user_id": user_id, "status": "error", "error": str(e)})
+        
+        return {
+            "status": "success",
+            "total_users": len(all_users),
+            "users_with_gmail": len(users_with_tokens),
+            "users_processed": len(results),
+            "results": results
+        }
+        
+    except Exception as e:
+        print(f"[ERROR] Master scheduler failed: {e}")
+        import traceback
+        traceback.print_exc()
+        return {"status": "error", "message": str(e)}
 
 
 if __name__ == "__main__":

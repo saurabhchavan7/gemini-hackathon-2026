@@ -130,3 +130,21 @@ def authenticate_user(authorization_code: str) -> Dict:
     except Exception as e:
         print(f"[ERROR] Authentication failed: {e}")
         raise
+
+
+async def save_tokens_to_firestore(user_id: str, tokens: Dict) -> bool:
+    """Save Google OAuth tokens to Firestore during login"""
+    try:
+        from services.token_service import TokenService
+        
+        token_service = TokenService()
+        
+        return await token_service.save_google_tokens(
+            user_id=user_id,
+            access_token=tokens.get("access_token"),
+            refresh_token=tokens.get("refresh_token"),
+            expires_in=tokens.get("expires_in", 3600)
+        )
+    except Exception as e:
+        print(f"[ERROR] Failed to save tokens: {e}")
+        return False
