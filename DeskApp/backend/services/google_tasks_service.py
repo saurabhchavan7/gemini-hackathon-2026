@@ -20,8 +20,15 @@ class GoogleTasksService:
     def _get_service(self):
         """Lazy load tasks service"""
         if not self.tasks_service:
-            self.tasks_service = self.auth_service.get_tasks_service()
+            import asyncio
+            loop = asyncio.get_event_loop()
+            self.tasks_service = loop.run_until_complete(self.auth_service.get_tasks_service())
         return self.tasks_service
+    
+    async def initialize(self):
+        """Initialize Tasks service - call this before using"""
+        self.tasks_service = await self.auth_service.get_tasks_service()
+        print(f"[TASKS] Service initialized for user {self.user_id}")
     
     def _get_default_tasklist(self):
         """Get the default task list ID"""
@@ -109,6 +116,8 @@ class GoogleTasksService:
             
         except Exception as e:
             print(f"[ERROR] Failed to create task: {e}")
+            import traceback
+            traceback.print_exc()
             return {
                 "status": "error",
                 "message": str(e)

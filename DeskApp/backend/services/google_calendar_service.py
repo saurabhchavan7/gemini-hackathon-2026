@@ -20,8 +20,15 @@ class GoogleCalendarService:
     def _get_service(self):
         """Lazy load calendar service"""
         if not self.calendar_service:
-            self.calendar_service = self.auth_service.get_calendar_service()
+            import asyncio
+            loop = asyncio.get_event_loop()
+            self.calendar_service = loop.run_until_complete(self.auth_service.get_calendar_service())
         return self.calendar_service
+
+    async def initialize(self):
+        """Initialize Calendar service - call this before using"""
+        self.calendar_service = await self.auth_service.get_calendar_service()
+        print(f"[CALENDAR] Service initialized for user {self.user_id}")
     
     def _parse_datetime(self, time_str: str) -> Optional[datetime]:
         """Parse various datetime formats"""

@@ -198,7 +198,7 @@ Always return MultiActionClassification with:
 - domain: Primary life context
 - context_type: What the content is
 - actions: List of ALL ActionItems (1 or more)
-- overall_summary: Brief description of entire capture
+- overall_summary: Brief description of what needs to be done or what happened. Write as if speaking directly to the user. Use imperative or declarative form. Never mention 'user' or 'the user'. Examples: 'Meeting scheduled with John tomorrow' not 'User scheduled meeting with John'. 'Buy groceries from store' not 'User wants to buy groceries'. Keep under 100 characters.
 - primary_intent: Most important action's intent
 - classification_reasoning: Your logic
 
