@@ -13,15 +13,18 @@
  * - Logout
  */
 
+require('dotenv').config();
+
 const GoogleAuth = require('./src/auth/GoogleAuth');
 const TokenManager = require('./src/auth/TokenManager');
 const CloudRunClient = require('./src/api/CloudRunClient');
+const axios = require('axios');
 const { app, BrowserWindow, ipcMain, globalShortcut, desktopCapturer, screen, Notification, dialog } = require('electron');
 const path = require('path');
 const fs = require('fs');
-
 // Import electron-store - it's an ES module, so we need to import it differently
 let Store;
+let authStore;
 let store;
 let notificationWindow = null;
 
@@ -174,6 +177,65 @@ ipcMain.handle('show-capture-notification', async (event, data) => {
 
 
 
+ipcMain.handle('api-get-inbox', async (event, params) => {
+  try {
+    console.log('📥 [IPC] Getting inbox with params:', params);
+    const result = await CloudRunClient.getInbox(params);
+    console.log('✅ [IPC] Inbox retrieved:', result.total, 'items');
+    return result;
+  } catch (error) {
+    console.error('❌ [IPC] Failed to get inbox:', error);
+    console.error('❌ [IPC] Error details:', error.response?.data || error.message);
+    return { success: false, items: [], total: 0, error: error.message };
+  }
+});
+
+ipcMain.handle('api-get-capture', async (event, captureId) => {
+  try {
+    console.log('📄 [IPC] Getting capture:', captureId);
+    const result = await CloudRunClient.getCaptureById(captureId);
+    return result;
+  } catch (error) {
+    console.error('❌ [IPC] Failed to get capture:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+
+
+ipcMain.handle('api-ask-capture', async (event, captureId, question) => {
+  try {
+    console.log('💬 [IPC] Asking about capture:', captureId, 'Question:', question);
+    
+    const token = await TokenManager.getToken();
+    if (!token) {
+      return { success: false, error: 'Not authenticated' };
+    }
+    
+    const params = new URLSearchParams();
+    params.append('question', question);
+    
+    const response = await axios.post(
+      `${BACKEND_URL}/api/inbox/${captureId}/ask`,
+      params,
+      {
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+          'Authorization': `Bearer ${token}`
+        }
+      }
+    );
+    
+    console.log('✅ [IPC] Answer received:', response.data.answer);
+    return response.data;
+    
+  } catch (error) {
+    console.error('❌ [IPC] Failed to ask about capture:', error.message);
+    console.error('❌ [IPC] Error details:', error.response?.data || error.response || error);
+    return { success: false, error: error.response?.data?.detail || error.message };
+  }
+});
+
 // Async initialization function
 async function initializeStore() {
   Store = (await import('electron-store')).default;
@@ -186,11 +248,27 @@ async function initializeStore() {
   });
 }
 
+async function initializeStores() {
+  Store = (await import('electron-store')).default;
+  
+  authStore = new Store({ name: 'auth' });
+  
+  store = new Store({
+    defaults: {
+      buttonPosition: { x: 100, y: 100 },
+      buttonVisible: true,
+      captureShortcut: 'CommandOrControl+Shift+L'
+    }
+  });
+  
+  console.log('✅ Stores initialized');
+}
+
 let mainWindow = null;
 let floatingButton = null;
 
-// Backend URL - adjust as needed
-const BACKEND_URL = process.env.BACKEND_URL || 'https://lifeos-backend-1056690364460.us-central1.run.app';
+const BACKEND_URL = process.env.BACKEND_URL || 'http://127.0.0.1:8000';
+console.log('🌐 [ELECTRON] Backend URL:', BACKEND_URL);
 
 // Ensure captures directory exists
 const capturesDir = path.join(__dirname, 'captures', 'screenshots');
@@ -240,20 +318,92 @@ async function createMainWindow() {
 }
 
 // Create floating capture button
+// function createFloatingButton() {
+//   // Get saved position or use default
+//   const savedPosition = store.get('buttonPosition');
+
+//   // Get primary display dimensions
+//   const primaryDisplay = screen.getPrimaryDisplay();
+//   const { width, height } = primaryDisplay.workAreaSize;
+
+//   // Ensure position is within screen bounds
+//   const x = Math.min(savedPosition.x, width - 90);
+//   const y = Math.min(savedPosition.y, height - 90);
+
+//   floatingButton = new BrowserWindow({
+//     width: 280,  // ← Reduced from 600 to fit just the menu
+//     height: 280,
+//     x: x,
+//     y: y,
+//     frame: false,
+//     transparent: true,
+//     alwaysOnTop: true,
+//     resizable: false,
+//     movable: true,
+//     skipTaskbar: true,
+//     focusable: false,
+//     webPreferences: {
+//       preload: path.join(__dirname, 'preload.js'),
+//       contextIsolation: true,
+//       nodeIntegration: false
+//     }
+//   });
+
+//   // Load the floating button HTML
+//   floatingButton.loadFile(path.join(__dirname, 'src', 'components', 'floating-button.html'));
+
+//   floatingButton.webContents.on('did-fail-load', (event, errorCode, errorDescription) => {
+//     console.error('❌ Floating button failed to load:', errorCode, errorDescription);
+//   });
+
+//   floatingButton.webContents.on('did-finish-load', () => {
+//     floatingButton.show();
+//     console.log('✅ Floating button loaded successfully');
+//   });
+//   // Keep window on top with highest priority
+//   floatingButton.setAlwaysOnTop(true, 'screen-saver');
+//   floatingButton.setVisibleOnAllWorkspaces(true);
+
+//   // Set click-through for the window (allow clicking through transparent areas)
+//   floatingButton.setIgnoreMouseEvents(false);
+
+//   // Save position when window is moved
+//   floatingButton.on('moved', () => {
+//     const position = floatingButton.getPosition();
+//     store.set('buttonPosition', { x: position[0], y: position[1] });
+//   });
+
+//   floatingButton.on('closed', () => {
+//     floatingButton = null;
+//   });
+
+//   // Open DevTools in development (for debugging)
+//   if (process.env.NODE_ENV === 'development') {
+//     floatingButton.webContents.openDevTools({ mode: 'detach' });
+//   }
+// }
+
+// Debug code to add to electron.js in createFloatingButton() function
+
 function createFloatingButton() {
+  console.log('🔍 [DEBUG] createFloatingButton called');
+  
   // Get saved position or use default
   const savedPosition = store.get('buttonPosition');
+  console.log('🔍 [DEBUG] Saved position:', savedPosition);
 
   // Get primary display dimensions
   const primaryDisplay = screen.getPrimaryDisplay();
   const { width, height } = primaryDisplay.workAreaSize;
+  console.log('🔍 [DEBUG] Screen size:', { width, height });
 
   // Ensure position is within screen bounds
   const x = Math.min(savedPosition.x, width - 90);
   const y = Math.min(savedPosition.y, height - 90);
+  console.log('🔍 [DEBUG] Button position:', { x, y });
 
   floatingButton = new BrowserWindow({
-    width: 280,  // ← Reduced from 600 to fit just the menu
+    width: 280,
     height: 280,
     x: x,
     y: y,
@@ -264,6 +414,7 @@ function createFloatingButton() {
     movable: true,
     skipTaskbar: true,
     focusable: false,
+    show: true,  // ⭐ Try with this first
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
@@ -271,19 +422,39 @@ function createFloatingButton() {
     }
   });
 
+  console.log('🔍 [DEBUG] BrowserWindow created');
+  console.log('🔍 [DEBUG] floatingButton exists?', !!floatingButton);
+  console.log('🔍 [DEBUG] floatingButton.isVisible()?', floatingButton.isVisible());
+  console.log('🔍 [DEBUG] floatingButton.isDestroyed()?', floatingButton.isDestroyed());
+
   // Load the floating button HTML
-  floatingButton.loadFile(path.join(__dirname, 'src', 'components', 'floating-button.html'));
+  const buttonPath = path.join(__dirname, 'src', 'components', 'floating-button.html');
+  console.log('🔍 [DEBUG] Loading from path:', buttonPath);
+  console.log('🔍 [DEBUG] File exists?', fs.existsSync(buttonPath));
+
+  floatingButton.loadFile(buttonPath);
 
   floatingButton.webContents.on('did-fail-load', (event, errorCode, errorDescription) => {
-    console.error('❌ Floating button failed to load:', errorCode, errorDescription);
+    console.error('❌ [DEBUG] Floating button failed to load:', errorCode, errorDescription);
   });
 
   floatingButton.webContents.on('did-finish-load', () => {
-    console.log('✅ Floating button loaded successfully');
+    console.log('✅ [DEBUG] Floating button loaded successfully');
+    console.log('🔍 [DEBUG] After load - isVisible?', floatingButton.isVisible());
+    console.log('🔍 [DEBUG] After load - getBounds:', floatingButton.getBounds());
+    
+    // Force show
+    floatingButton.show();
+    floatingButton.focus(); // Try to focus it
+    
+    console.log('🔍 [DEBUG] After show() - isVisible?', floatingButton.isVisible());
+    console.log('🔍 [DEBUG] After show() - isFocused?', floatingButton.isFocused());
   });
+
   // Keep window on top with highest priority
   floatingButton.setAlwaysOnTop(true, 'screen-saver');
   floatingButton.setVisibleOnAllWorkspaces(true);
+  console.log('🔍 [DEBUG] Set always on top and visible on all workspaces');
 
   // Set click-through for the window (allow clicking through transparent areas)
   floatingButton.setIgnoreMouseEvents(false);
@@ -291,17 +462,22 @@ function createFloatingButton() {
   // Save position when window is moved
   floatingButton.on('moved', () => {
     const position = floatingButton.getPosition();
+    console.log('🔍 [DEBUG] Button moved to:', position);
     store.set('buttonPosition', { x: position[0], y: position[1] });
   });
 
   floatingButton.on('closed', () => {
+    console.log('🔍 [DEBUG] Floating button closed');
     floatingButton = null;
   });
 
   // Open DevTools in development (for debugging)
   if (process.env.NODE_ENV === 'development') {
+    console.log('🔍 [DEBUG] Opening DevTools for floating button');
     floatingButton.webContents.openDevTools({ mode: 'detach' });
   }
+  
+  console.log('🔍 [DEBUG] createFloatingButton completed');
 }
 
 // Register global keyboard shortcut
@@ -431,6 +607,8 @@ async function getBrowserUrl(browserProcess) {
 // Send capture to backend
 async function sendToBackend(screenshotPath, context, audioPath, textNote, transcript = null) {
   try {
+    console.log('📤 [ELECTRON] Sending to backend:', BACKEND_URL);
+
     const FormData = require('form-data');
     const axios = require('axios');
     const token = await TokenManager.getToken();
@@ -1039,28 +1217,231 @@ ipcMain.handle('send-audio-note', async (event, data) => {
   }
 });
 
+ipcMain.handle('api-get-collections', async (event) => {
+  try {
+    console.log('📁 [IPC] Getting collections');
+    const result = await CloudRunClient.getCollections();
+    console.log('✅ [IPC] Collections retrieved:', result.total);
+    return result;
+  } catch (error) {
+    console.error('❌ [IPC] Failed to get collections:', error);
+    return { success: false, collections: [], total: 0 };
+  }
+});
+
+ipcMain.handle('api-get-theme-clusters', async (event, numClusters = 4) => {
+  try {
+    console.log('🎨 [IPC] Getting theme clusters');
+    const result = await CloudRunClient.getThemeClusters(numClusters);
+    console.log('✅ [IPC] Clusters retrieved:', result.total);
+    return result;
+  } catch (error) {
+    console.error('❌ [IPC] Failed to get clusters:', error);
+    return { success: false, clusters: [], total: 0 };
+  }
+});
+
+ipcMain.handle('api-ask-question', async (event, question, filterDomain) => {
+  try {
+    console.log('🤔 [IPC] Asking question:', question);
+    
+    // Get token from TokenManager (which knows the correct key)
+    const TokenManager = require('./src/auth/TokenManager');
+    const token = await TokenManager.getToken();
+    
+    if (!token) {
+      throw new Error('Not authenticated');
+    }
+    
+    const result = await CloudRunClient.askQuestion(question, filterDomain, token);
+    console.log('✅ [IPC] Got answer');
+    return result;
+  } catch (error) {
+    console.error('❌ [IPC] Failed to ask question:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+// Add IPC handler for getting proactive notifications
+ipcMain.handle('api-get-proactive-notifications', async (event) => {
+  try {
+    console.log('🔔 [IPC] Getting proactive notifications');
+    const result = await CloudRunClient.getProactiveNotifications();
+    console.log('✅ [IPC] Got', result.count, 'notifications');
+    return result;
+  } catch (error) {
+    console.error('❌ [IPC] Failed to get proactive notifications:', error);
+    return { success: false, notifications: [], count: 0 };
+  }
+});
+
+// Proactive notification system
+let notificationInterval = null;
+
+function startProactiveNotifications() {
+  console.log('🔔 Starting proactive notification system...');
+  
+  // Check every 30 minutes (1800000 ms)
+  // For testing, use 2 minutes: 2 * 60 * 1000
+  const checkInterval = 2 * 60 * 1000;
+  
+  notificationInterval = setInterval(async () => {
+    try {
+      const isAuth = await TokenManager.isAuthenticated();
+      if (!isAuth) {
+        console.log('⚠️ Not authenticated, skipping proactive check');
+        return;
+      }
+      
+      console.log('🔔 Checking for proactive notifications...');
+      const result = await CloudRunClient.getProactiveNotifications();
+      
+      if (result.notifications && result.notifications.length > 0) {
+        console.log('✅ Found', result.notifications.length, 'proactive notifications');
+        
+        // Show the highest priority notification
+        const topNotif = result.notifications[0];
+        showProactiveNotification(topNotif);
+      } else {
+        console.log('ℹ️ No proactive notifications at this time');
+      }
+      
+    } catch (error) {
+      console.error('❌ Proactive notification check failed:', error);
+    }
+  }, checkInterval);
+  
+  // Also check immediately on startup (after 30 seconds)
+  setTimeout(async () => {
+    try {
+      const isAuth = await TokenManager.isAuthenticated();
+      if (!isAuth) return;
+      
+      const result = await CloudRunClient.getProactiveNotifications();
+      if (result.notifications && result.notifications.length > 0) {
+        showProactiveNotification(result.notifications[0]);
+      }
+    } catch (error) {
+      console.error('❌ Initial proactive check failed:', error);
+    }
+  }, 30000);
+}
+
+function showProactiveNotification(notification) {
+  console.log('🔔 Showing proactive notification:', notification.title);
+  
+  // Close existing notification if open
+  if (notificationWindow && !notificationWindow.isDestroyed()) {
+    notificationWindow.close();
+  }
+  notificationWindow = null;
+  
+  try {
+    notificationWindow = new BrowserWindow({
+      width: 420,
+      height: 300,
+      frame: false,
+      transparent: true,
+      alwaysOnTop: true,
+      resizable: false,
+      skipTaskbar: true,
+      show: false,
+      webPreferences: {
+        preload: path.join(__dirname, 'preload.js'),
+        contextIsolation: true,
+        nodeIntegration: false,
+        devTools: true
+      }
+    });
+
+    // Bottom-right positioning
+    const display = screen.getPrimaryDisplay();
+    const { x, y, width, height } = display.workArea;
+    const margin = 16;
+    notificationWindow.setPosition(
+      x + width - 420 - margin,
+      y + height - 300 - margin
+    );
+
+    // Load HTML
+    const notificationPath = path.join(__dirname, 'src', 'components', 'ProactiveNotification.html');
+    
+    notificationWindow.loadFile(notificationPath);
+    
+    // Send notification data
+    notificationWindow.webContents.on('did-finish-load', () => {
+      notificationWindow.webContents.send('proactive-notification-data', notification);
+      notificationWindow.show();
+      console.log('✅ Proactive notification shown');
+    });
+
+    notificationWindow.on('closed', () => {
+      console.log('🔔 Proactive notification closed');
+      notificationWindow = null;
+    });
+
+    // Auto-close after 10 seconds
+    setTimeout(() => {
+      if (notificationWindow && !notificationWindow.isDestroyed()) {
+        notificationWindow.close();
+      }
+    }, 10000);
+
+  } catch (err) {
+    console.error('❌ Failed to show proactive notification:', err);
+    if (notificationWindow && !notificationWindow.isDestroyed()) {
+      notificationWindow.close();
+      notificationWindow = null;
+    }
+  }
+}
+
+// In app.whenReady()
 app.whenReady().then(async () => {
   console.log('🚀 LifeOS starting...');
 
-  // IMPORTANT: Initialize electron-store first
-  await initializeStore();
-  console.log('✅ Store initialized');
+  await initializeStores();
 
-  // Create main window
   createMainWindow();
 
-  // Check if user is already authenticated (auto-login)
   const isAuthenticated = await TokenManager.isAuthenticated();
   if (isAuthenticated) {
     console.log('✅ User already authenticated, creating floating button...');
+    store.set('buttonPosition', { x: 300, y: 300 });
     createFloatingButton();
+    
+    // START PROACTIVE NOTIFICATIONS
+    startProactiveNotifications();
   }
 
-  // Register keyboard shortcuts
   registerShortcuts();
 
   console.log('✅ LifeOS ready!');
 });
+
+
+// app.whenReady().then(async () => {
+//   console.log('🚀 LifeOS starting...');
+
+//   // Initialize stores FIRST
+//   await initializeStores();
+
+//   // Create main window
+//   createMainWindow();
+
+//   // Check if user is already authenticated (auto-login)
+//   const isAuthenticated = await TokenManager.isAuthenticated();
+//   if (isAuthenticated) {
+//     console.log('✅ User already authenticated, creating floating button...');
+//     store.set('buttonPosition', { x: 300, y: 300 });
+//     createFloatingButton();
+//   }
+
+//   // Register keyboard shortcuts
+//   registerShortcuts();
+
+//   console.log('✅ LifeOS ready!');
+// });
 
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') {

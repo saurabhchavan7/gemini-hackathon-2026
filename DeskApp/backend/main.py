@@ -8,6 +8,7 @@ import uuid
 import json
 import asyncio
 from datetime import datetime, timezone
+from google.cloud import firestore
 from typing import Optional
 
 # 1. Standard FastAPI imports
@@ -20,6 +21,7 @@ from google import genai
 from auth import google_oauth, jwt_manager
 from models import user
 from models.database import init_database, get_connection
+import google.generativeai as genai
 
 # 3. Agentic Architecture Imports
 from agents.perception.capture_agent import PerceptionAgent
@@ -40,7 +42,12 @@ from agents.resource_finder_agent import ResourceFinderAgent
 from services.embedding_service import EmbeddingService
 from services.vector_search_service import VectorSearchService
 from services.rag_service import RAGService
+from services.clustering_service import ClusteringService
+from datetime import datetime
+import pytz
+from services.notification_service import NotificationService
 
+notification_service = NotificationService()
 
 from models.capture import (
     CaptureRecord, 
@@ -654,9 +661,15 @@ async def handle_capture(
                 capture_id=capture_id,
                 user_id=user_id,
                 combined_text=combined_for_embedding,
+                # metadata={
+                #     'domain': classification.domain,
+                #     'timestamp': datetime.now(timezone.utc).isoformat()
+                # }
+                
+
                 metadata={
                     'domain': classification.domain,
-                    'timestamp': datetime.now(timezone.utc).isoformat()
+                    'timestamp': datetime.utcnow().isoformat()  # ✅ WORKS
                 }
             )
             
@@ -826,10 +839,13 @@ def get_item(item_id: str):
 async def get_inbox(
     limit: int = 50,
     filter_intent: str = Query(None),
-    filter_domain: str = Query(None),  # NEW: Filter by domain
+    filter_domain: str = Query(None),
     authorization: str = Header(None)
 ):
-    """Retrieves user's captured memories with AI insights (3-Layer Classification)"""
+    """
+    Retrieves user's captured memories with screenshots
+    Returns enriched data with screenshot URLs from GCS
+    """
     
     if not authorization or not authorization.startswith("Bearer "):
         raise HTTPException(status_code=401, detail="Unauthorized")
@@ -838,9 +854,19 @@ async def get_inbox(
     payload = jwt_manager.verify_jwt_token(token)
     user_id = payload["user_id"]
     
+    print(f"[API] Inbox request for user: {user_id}")
+    
     try:
         db = FirestoreService()
-        docs = db._get_user_ref(user_id).collection(settings.COLLECTION_MEMORIES).limit(limit).stream()
+        
+        # Get memories from Firestore
+        docs = (
+            db._get_user_ref(user_id)
+            .collection(settings.COLLECTION_MEMORIES)
+            .order_by("created_at", direction=firestore.Query.DESCENDING)
+            .limit(limit)
+            .stream()
+        )
         
         memories = []
         for doc in docs:
@@ -851,11 +877,44 @@ async def get_inbox(
             if filter_intent and memory_data.get('intent') != filter_intent:
                 continue
             
-            # Filter by domain (NEW - if specified)
+            # Filter by domain (if specified)
             if filter_domain and memory_data.get('domain') != filter_domain:
                 continue
             
+            # Get comprehensive capture to fetch screenshot URL
+            capture_ref = memory_data.get('capture_ref')
+            if capture_ref:
+                try:
+                    comp_doc = (
+                        db._get_user_ref(user_id)
+                        .collection("comprehensive_captures")
+                        .document(capture_ref)
+                        .get()
+                    )
+                    
+                    if comp_doc.exists:
+                        comp_data = comp_doc.to_dict()
+                        input_data = comp_data.get('input', {})
+                        
+                        # Add screenshot URL to memory
+                        screenshot_path = input_data.get('screenshot_path')
+                        if screenshot_path:
+                            # Build GCS public URL
+                            bucket_name = os.getenv('GCS_BUCKET', 'rag-gcs-bucket')
+                            memory_data['screenshot_url'] = f"https://storage.googleapis.com/{bucket_name}/{screenshot_path}"
+                        
+                        # Add window context
+                        context = input_data.get('context', {})
+                        memory_data['source_app'] = context.get('app_name', 'Unknown')
+                        memory_data['window_title'] = context.get('window_title', '')
+                        memory_data['url'] = context.get('url')
+                        
+                except Exception as e:
+                    print(f"[WARNING] Could not fetch comprehensive capture for {capture_ref}: {e}")
+            
             memories.append(memory_data)
+        
+        print(f"[API] Returning {len(memories)} memories")
         
         return {
             "success": True,
@@ -867,7 +926,7 @@ async def get_inbox(
         print(f"[ERROR] Inbox fetch failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-
+   
 # ============================================
 # COMPREHENSIVE CAPTURE ENDPOINTS
 # ============================================
@@ -2750,7 +2809,99 @@ async def ask_question(
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
 
+@app.post("/api/inbox/{capture_id}/ask")
+async def ask_about_capture(
+    capture_id: str,
+    question: str = Form(...),
+    authorization: str = Header(None)
+):
+    """Ask Gemini a question about a specific capture"""
+    
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    
+    token = authorization.replace("Bearer ", "")
+    payload = jwt_manager.verify_jwt_token(token)
+    user_id = payload["user_id"]
+    
+    try:
+        print(f"[ASK API] Question about capture {capture_id}: '{question}'")
+        
+        # Get the specific capture
+        db = FirestoreService()
+        memory_doc = db._get_user_ref(user_id).collection(settings.COLLECTION_MEMORIES).document(capture_id).get()
+        
+        if not memory_doc.exists:
+            raise HTTPException(status_code=404, detail="Capture not found")
+        
+        memory_data = memory_doc.to_dict()
+        
+        # Build context from this specific capture
+        context = f"""Title: {memory_data.get('title', 'Untitled')}
+Summary: {memory_data.get('one_line_summary', '')}
+Full Content: {memory_data.get('full_transcript', '')}
+Domain: {memory_data.get('domain', 'unknown')}
+Intent: {memory_data.get('intent', 'unknown')}
+Tags: {', '.join(memory_data.get('tags', []))}"""
+        
+        # Generate answer using Gemini
+        import google.generativeai as genai
+        genai.configure(api_key=settings.GOOGLE_API_KEY)
+        model = genai.GenerativeModel('gemini-3-flash-preview')
+        
+        prompt = f"""You are an intelligent assistant helping users find information about their captured items.
 
+CAPTURED ITEM:
+• Title: {memory_data.get('title', 'Untitled')}
+• Summary: {memory_data.get('one_line_summary', '')}
+• Content: {memory_data.get('full_transcript', '')}
+• Domain: {memory_data.get('domain', 'unknown')}
+• Intent: {memory_data.get('intent', 'unknown')}
+• Tags: {', '.join(memory_data.get('tags', []))}
+
+QUESTION: {question}
+
+INSTRUCTIONS:
+1. Answer based on the captured content and your knowledge
+2. Provide a BRIEF, well-formatted response (2-4 sentences max)
+3. Use citations: [From Capture], [General Knowledge]
+4. Format cleanly with sections (ANSWER, DETAILS, NOTES)
+5. NO EMOJIS - Professional formatting only
+
+FORMAT:
+ANSWER:
+[Direct answer]
+
+DETAILS:
+• [Key detail 1] [Citation]
+• [Key detail 2] [Citation]
+
+NOTES:
+[Additional context if needed]
+
+Response:"""
+        
+        response = model.generate_content(prompt)
+        answer = response.text.strip()
+        
+        print(f"[ASK API] Answer generated: {answer[:100]}...")
+        
+        return {
+            "success": True,
+            "question": question,
+            "answer": answer,
+            "capture_id": capture_id,
+            "capture_title": memory_data.get('title', 'Untitled')
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"[ASK API] Failed: {e}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+    
 @app.post("/api/ask/no-auth")
 async def ask_no_auth(
     question: str = Form(...),
@@ -2919,6 +3070,253 @@ async def check_emails_all_users():
         import traceback
         traceback.print_exc()
         return {"status": "error", "message": str(e)}
+@app.get("/api/collections")
+async def get_collections(authorization: str = Header(None)):
+    """Get smart collections based on 12 life domains"""
+    
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    
+    token = authorization.replace("Bearer ", "")
+    payload = jwt_manager.verify_jwt_token(token)
+    user_id = payload["user_id"]
+    
+    try:
+        print(f"[API] Collections request for user: {user_id}")
+        
+        db = FirestoreService()
+        
+        # Get all memories
+        all_memories = []
+        docs = db._get_user_ref(user_id).collection(settings.COLLECTION_MEMORIES).stream()
+        for doc in docs:
+            memory_data = doc.to_dict()
+            memory_data['id'] = doc.id
+            all_memories.append(memory_data)
+        
+        print(f"[API] Found {len(all_memories)} total memories")
+        
+        # Define 12 collections
+        collections_config = [
+            {
+                "id": "work_career",
+                "name": "Work & Career",
+                "description": "Job postings, meetings, tasks, and professional growth",
+                "icon": "Briefcase",
+                "domain": "work_career"
+            },
+            {
+                "id": "education_learning",
+                "name": "Education & Learning",
+                "description": "Courses, tutorials, research, and study materials",
+                "icon": "GraduationCap",
+                "domain": "education_learning"
+            },
+            {
+                "id": "money_finance",
+                "name": "Money & Finance",
+                "description": "Bills, payments, subscriptions, and investments",
+                "icon": "DollarSign",
+                "domain": "money_finance"
+            },
+            {
+                "id": "home_daily_life",
+                "name": "Home & Daily Life",
+                "description": "Groceries, repairs, utilities, and household tasks",
+                "icon": "Home",
+                "domain": "home_daily_life"
+            },
+            {
+                "id": "health_wellbeing",
+                "name": "Health & Wellness",
+                "description": "Doctor appointments, fitness, and medical records",
+                "icon": "Heart",
+                "domain": "health_wellbeing"
+            },
+            {
+                "id": "family_relationships",
+                "name": "Family & Relationships",
+                "description": "Family events, birthdays, and personal connections",
+                "icon": "Users",
+                "domain": "family_relationships"
+            },
+            {
+                "id": "travel_movement",
+                "name": "Travel & Movement",
+                "description": "Flights, hotels, itineraries, and travel plans",
+                "icon": "Plane",
+                "domain": "travel_movement"
+            },
+            {
+                "id": "shopping_consumption",
+                "name": "Shopping",
+                "description": "Products, wishlists, and purchase decisions",
+                "icon": "ShoppingCart",
+                "domain": "shopping_consumption"
+            },
+            {
+                "id": "entertainment_leisure",
+                "name": "Entertainment",
+                "description": "Movies, shows, games, and leisure activities",
+                "icon": "Film",
+                "domain": "entertainment_leisure"
+            },
+            {
+                "id": "social_community",
+                "name": "Social & Community",
+                "description": "Social posts, news, and community engagement",
+                "icon": "MessageCircle",
+                "domain": "social_community"
+            },
+            {
+                "id": "admin_documents",
+                "name": "Documents & Admin",
+                "description": "IDs, forms, legal documents, and official papers",
+                "icon": "FileText",
+                "domain": "admin_documents"
+            },
+            {
+                "id": "ideas_thoughts",
+                "name": "Ideas & Thoughts",
+                "description": "Personal notes, brainstorms, and creative ideas",
+                "icon": "Lightbulb",
+                "domain": "ideas_thoughts"
+            }
+        ]
+        
+        # Build collections matching SmartCollection type
+        collections = []
+        for idx, config in enumerate(collections_config):
+            domain_memories = [m for m in all_memories if m.get('domain') == config['domain']]
+            
+            if len(domain_memories) > 0:  # Only include collections with items
+                collections.append({
+                    "id": config['id'],
+                    "name": config['name'],
+                    "description": config['description'],
+                    "icon": config['icon'],
+                    "filter": {
+                        "domains": [config['domain']]  # Filter by domain
+                    },
+                    "captureIds": [m['id'] for m in domain_memories],
+                    "order": idx
+                })
+        
+        print(f"[API] Returning {len(collections)} non-empty collections")
+        
+        return {
+            "success": True,
+            "collections": collections,
+            "total": len(collections)
+        }
+        
+    except Exception as e:
+        print(f"[ERROR] Collections fetch failed: {e}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+    
+
+# Initialize at top with other services
+clustering_service = ClusteringService()
+
+@app.get("/api/synthesis/clusters")
+async def get_theme_clusters(
+    num_clusters: int = Query(4, ge=2, le=8),
+    authorization: str = Header(None)
+):
+    """Generate AI-powered theme clusters from user's memories"""
+    
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    
+    token = authorization.replace("Bearer ", "")
+    payload = jwt_manager.verify_jwt_token(token)
+    user_id = payload["user_id"]
+    
+    try:
+        print(f"[SYNTHESIS] Generating theme clusters for user: {user_id}")
+        
+        db = FirestoreService()
+        
+        # Get all memories
+        memories_query = (
+            db._get_user_ref(user_id)
+            .collection(settings.COLLECTION_MEMORIES)
+            .limit(100)
+            .stream()
+        )
+        
+        memories = []
+        for doc in memories_query:
+            memory_data = doc.to_dict()
+            memory_data['id'] = doc.id
+            memories.append(memory_data)
+        
+        print(f"[SYNTHESIS] Found {len(memories)} memories")
+        
+        if len(memories) < 2:
+            return {
+                "success": True,
+                "clusters": [],
+                "total": 0,
+                "message": "Not enough captures yet. Capture more items to discover themes!"
+            }
+        
+        # Generate clusters using AI
+        clusters = clustering_service.generate_clusters(
+            memories=memories,
+            num_clusters=num_clusters
+        )
+        
+        print(f"[SYNTHESIS] Returning {len(clusters)} clusters")
+        
+        return {
+            "success": True,
+            "clusters": clusters,
+            "total": len(clusters)
+        }
+        
+    except Exception as e:
+        print(f"[ERROR] Clustering failed: {e}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+    
+
+@app.get("/api/notifications/proactive")
+async def get_proactive_notifications(authorization: str = Header(None)):
+    """Get AI-powered proactive notifications"""
+    
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    
+    token = authorization.replace("Bearer ", "")
+    payload = jwt_manager.verify_jwt_token(token)
+    user_id = payload["user_id"]
+    
+    try:
+        notifications = notification_service.get_proactive_notifications(user_id)
+        
+        return {
+            "success": True,
+            "notifications": notifications,
+            "count": len(notifications)
+        }
+        
+    except Exception as e:
+        print(f"[API] Proactive notifications failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+    
+    
+# if __name__ == "__main__":
+#     import uvicorn
+#     print("[STARTUP] LifeOS Multi-Agent System v2.0")
+#     print("[STARTUP] 3-Layer Universal Classification System")
+#     print("[STARTUP] Domains: 12 | Context Types: 19 | Intents: 14")
+#     print("[STARTUP] API running athttps://lifeos-backend-1056690364460.us-central1.run.app")
+#     port = int(os.getenv("PORT", "3001"))
+#     uvicorn.run(app, host="0.0.0.0", port=port)
 
 
 if __name__ == "__main__":
@@ -2926,8 +3324,16 @@ if __name__ == "__main__":
     print("[STARTUP] LifeOS Multi-Agent System v2.0")
     print("[STARTUP] 3-Layer Universal Classification System")
     print("[STARTUP] Domains: 12 | Context Types: 19 | Intents: 14")
-    print("[STARTUP] API running athttps://lifeos-backend-1056690364460.us-central1.run.app")
-    port = int(os.getenv("PORT", "3001"))
-    uvicorn.run(app, host="0.0.0.0", port=port)
-
-
+    
+    # Dynamic port and host info
+    port = int(os.getenv("PORT", "8000"))  # Changed default to 8000
+    host = "0.0.0.0"
+    
+    # Determine environment
+    env = os.getenv("ENV", "local")
+    if env == "cloud":
+        print(f"[STARTUP] API running on Cloud Run (port {port})")
+    else:
+        print(f"[STARTUP] API running locally at http://localhost:{port}")
+    
+    uvicorn.run(app, host=host, port=port)
