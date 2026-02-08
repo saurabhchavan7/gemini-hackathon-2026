@@ -17,14 +17,14 @@ DOMAIN_COLLECTIONS = {
     "education_learning": "learning_items",
     "money_finance": "financial_items",
     "home_daily_life": "home_items",
-        "health_wellbeing": "health_items",
-        "family_relationships": "family_items",
-        "travel_movement": "travel_items",
-        "shopping_consumption": "shopping_lists",
-        "entertainment_leisure": "media_items",
-        "social_community": "social_items",
-        "admin_documents": "document_items",
-        "ideas_thoughts": "notes"
+    "health_wellbeing": "health_items",
+    "family_relationships": "family_items",
+    "travel_movement": "travel_items",
+    "shopping_consumption": "shopping_lists",
+    "entertainment_leisure": "media_items",
+    "social_community": "social_items",
+    "admin_documents": "document_items",
+    "ideas_thoughts": "notes"
     }
 
 class FirestoreService:
@@ -819,3 +819,135 @@ class FirestoreService:
         # Sort by created_at and return top N
         all_items.sort(key=lambda x: x.get('created_at', ''), reverse=True)
         return all_items[:limit]
+
+    # ============================================
+    # V2 ENHANCED METHODS - Fetch Subcollections
+    # ============================================
+
+    async def get_research_results(self, user_id: str, doc_id: str) -> dict:
+        """
+        Fetch research results from research_results subcollection
+        
+        Args:
+            user_id: User ID
+            doc_id: Document ID from research.firestore_doc_id
+            
+        Returns:
+            Research results dict with sources, summary, etc.
+        """
+        try:
+            doc_ref = (
+                self._get_user_ref(user_id)
+                .collection("research_results")
+                .document(doc_id)
+            )
+            
+            doc = doc_ref.get()
+            
+            if not doc.exists:
+                print(f"[FIRESTORE] Research results {doc_id} not found")
+                return None
+            
+            data = doc.to_dict()
+            print(f"[FIRESTORE] Retrieved research results: {doc_id}")
+            return data
+            
+        except Exception as e:
+            print(f"[ERROR] get_research_results failed: {e}")
+            return None
+
+    async def get_resource_findings(self, user_id: str, doc_id: str) -> dict:
+        """
+        Fetch learning resources from resource_findings subcollection
+        
+        Args:
+            user_id: User ID
+            doc_id: Document ID from resources.firestore_doc_id
+            
+        Returns:
+            Resource findings dict with resources array, ai_reasoning, etc.
+        """
+        try:
+            doc_ref = (
+                self._get_user_ref(user_id)
+                .collection("resource_findings")
+                .document(doc_id)
+            )
+            
+            doc = doc_ref.get()
+            
+            if not doc.exists:
+                print(f"[FIRESTORE] Resource findings {doc_id} not found")
+                return None
+            
+            data = doc.to_dict()
+            print(f"[FIRESTORE] Retrieved resource findings: {doc_id}")
+            return data
+            
+        except Exception as e:
+            print(f"[ERROR] get_resource_findings failed: {e}")
+            return None
+
+    async def get_enhanced_capture_data(self, user_id: str, capture_id: str) -> dict:
+        """
+        V2 ENHANCED: Fetches comprehensive capture with ALL subcollections
+        
+        This method:
+        1. Fetches main comprehensive_captures document
+        2. Fetches research_results if firestore_doc_id exists
+        3. Fetches resource_findings if firestore_doc_id exists
+        4. Merges all data into rich response
+        
+        Args:
+            user_id: User ID
+            capture_id: Capture ID
+            
+        Returns:
+            Complete capture data with all subcollections merged
+        """
+        try:
+            # 1. Get main comprehensive capture
+            main_capture = await self.get_comprehensive_capture(user_id, capture_id)
+            
+            if not main_capture:
+                print(f"[FIRESTORE V2] Capture {capture_id} not found")
+                return None
+            
+            print(f"[FIRESTORE V2] Building enhanced capture for {capture_id}")
+            
+            # 2. Fetch research results if available
+            if main_capture.get('research', {}).get('firestore_doc_id'):
+                research_doc_id = main_capture['research']['firestore_doc_id']
+                print(f"[FIRESTORE V2] Fetching research results: {research_doc_id}")
+                
+                research_data = await self.get_research_results(user_id, research_doc_id)
+                
+                if research_data:
+                    # Merge research data into main capture
+                    main_capture['research']['sources'] = research_data.get('sources', [])
+                    main_capture['research']['summary'] = research_data.get('summary', '')
+                    main_capture['research']['sources_count'] = research_data.get('sources_count', 0)
+                    print(f"[FIRESTORE V2] Merged {len(research_data.get('sources', []))} research sources")
+            
+            # 3. Fetch resource findings if available
+            if main_capture.get('resources', {}).get('firestore_doc_id'):
+                resource_doc_id = main_capture['resources']['firestore_doc_id']
+                print(f"[FIRESTORE V2] Fetching resource findings: {resource_doc_id}")
+                
+                resource_data = await self.get_resource_findings(user_id, resource_doc_id)
+                
+                if resource_data:
+                    # Merge resource data into main capture
+                    main_capture['resources']['resources'] = resource_data.get('resources', [])
+                    main_capture['resources']['ai_reasoning'] = resource_data.get('ai_reasoning', '')
+                    main_capture['resources']['learning_path'] = resource_data.get('learning_path', '')
+                    print(f"[FIRESTORE V2] Merged {len(resource_data.get('resources', []))} learning resources")
+            
+            print(f"[FIRESTORE V2] Enhanced capture ready with all subcollections")
+            return main_capture
+            
+        except Exception as e:
+            print(f"[ERROR] get_enhanced_capture_data failed: {e}")
+            import traceback
+            traceback.print_exc()
+            return None

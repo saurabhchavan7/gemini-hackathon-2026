@@ -201,6 +201,18 @@ ipcMain.handle('api-get-capture', async (event, captureId) => {
   }
 });
 
+ipcMain.handle('api-get-capture-v2', async (event, captureId) => {
+  try {
+    console.log('📄 [IPC V2] Getting enhanced capture:', captureId);
+    const result = await CloudRunClient.getCaptureByIdV2(captureId);
+    return result;
+  } catch (error) {
+    console.error('❌ [IPC V2] Failed to get capture:', error);
+    // Fallback to v1
+    console.log('🔄 [IPC V2] Falling back to v1');
+    return CloudRunClient.getCaptureById(captureId);
+  }
+});
 
 
 ipcMain.handle('api-ask-capture', async (event, captureId, question) => {
@@ -1275,6 +1287,17 @@ ipcMain.handle('api-get-proactive-notifications', async (event) => {
   }
 });
 
+ipcMain.handle('api-get-capture-by-id', async (event, captureId) => {
+  try {
+    console.log(`📥 [IPC] Fetching full capture: ${captureId}`);
+    const result = await CloudRunClient.getCaptureById(captureId);
+    return result;
+  } catch (error) {
+    console.error('❌ [IPC] Failed to get capture:', error);
+    return { success: false, error: error.message };
+  }
+});
+
 // Proactive notification system
 let notificationInterval = null;
 
@@ -1283,7 +1306,7 @@ function startProactiveNotifications() {
   
   // Check every 30 minutes (1800000 ms)
   // For testing, use 2 minutes: 2 * 60 * 1000
-  const checkInterval = 2 * 60 * 1000;
+  const checkInterval = 20 * 60 * 1000;
   
   notificationInterval = setInterval(async () => {
     try {

@@ -10,8 +10,9 @@ import type {
   UserSettings,
   CaptureStatus,
 } from "@/types/lifeos";
-import { getInbox, getCaptureById } from './api-client';
+import { getInbox, getCaptureById , getCaptureByIdV2} from './api-client';
 import { mapMemoryToCaptureItem } from './mappers';
+
 
 // Mock Data
 const mockCaptures: CaptureItem[] = [
@@ -406,6 +407,7 @@ export async function getCapture(id: string): Promise<CaptureItem | null> {
   try {
     if (typeof window !== 'undefined') {
       const result = await getCaptureById(id) as any;
+      
       if (result.success && result.capture) {
         return mapMemoryToCaptureItem(result.capture);
       }
@@ -414,6 +416,58 @@ export async function getCapture(id: string): Promise<CaptureItem | null> {
   } catch (error) {
     console.error('❌ [API] Failed to get capture:', error);
     return null;
+  }
+}
+
+/**
+ * Get full comprehensive capture details (including original inputs)
+ * Used by detail drawer to show screenshot, audio, text notes, files
+ */
+export async function getCaptureDetails(id: string): Promise<any> {
+  try {
+    console.log('🔍 [API] Fetching full capture details:', id);
+    
+    if (typeof window !== 'undefined') {
+      const result = await getCaptureById(id) as any;
+      
+      if (result.success && result.capture) {
+        console.log('✅ [API] Got full capture details');
+        return result.capture; // Return complete comprehensive capture with input data
+      }
+    }
+    
+    console.warn('⚠️ [API] No capture details found');
+    return null;
+    
+  } catch (error) {
+    console.error('❌ [API] Failed to get capture details:', error);
+    return null;
+  }
+}
+
+export async function getCaptureDetailsV2(id: string): Promise<any> {
+  try {
+    console.log('🔍 [API V2] Fetching enhanced capture details:', id);
+    
+    if (typeof window !== 'undefined') {
+      const result = await getCaptureByIdV2(id) as any;
+      
+      if (result.success && result.capture) {
+        console.log('✅ [API V2] Got enhanced capture with subcollections');
+        console.log('🔬 [API V2] Research sources:', result.metadata?.research_sources_count || 0);
+        console.log('📚 [API V2] Learning resources:', result.metadata?.resources_count || 0);
+        return result.capture;
+      }
+    }
+    
+    console.warn('⚠️ [API V2] No capture details found');
+    return null;
+    
+  } catch (error) {
+    console.error('❌ [API V2] Failed to get capture details:', error);
+    // Fallback to v1 if v2 fails
+    console.log('🔄 [API V2] Falling back to v1 endpoint');
+    return getCaptureDetails(id);
   }
 }
 

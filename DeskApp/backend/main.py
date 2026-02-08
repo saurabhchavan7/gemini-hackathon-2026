@@ -7,6 +7,7 @@ import sys
 import uuid
 import json
 import asyncio
+import io
 from datetime import datetime, timezone
 from google.cloud import firestore
 from typing import Optional
@@ -14,6 +15,7 @@ from typing import Optional
 # 1. Standard FastAPI imports
 from fastapi import FastAPI, File, UploadFile, Form, Header, HTTPException, WebSocket, WebSocketDisconnect, Query
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from google import genai
 
@@ -930,6 +932,117 @@ async def get_inbox(
 # ============================================
 # COMPREHENSIVE CAPTURE ENDPOINTS
 # ============================================
+# def public_gcs_url(bucket: str, object_path: str) -> str:
+#     return f"https://storage.googleapis.com/{bucket}/{object_path}"
+
+# @app.get("/api/capture/{capture_id}/full")
+# async def get_full_capture(
+#     capture_id: str,
+#     authorization: str = Header(None)
+# ):
+#     """
+#     Retrieves complete comprehensive capture with all agent results
+#     PLUS proxy URLs for GCS files (no signing needed)
+#     """
+    
+#     if not authorization or not authorization.startswith("Bearer "):
+#         raise HTTPException(status_code=401, detail="Unauthorized")
+    
+#     token = authorization.replace("Bearer ", "")
+#     payload = jwt_manager.verify_jwt_token(token)
+#     user_id = payload["user_id"]
+    
+#     try:
+#         db = FirestoreService()
+#         capture_data = await db.get_comprehensive_capture(user_id, capture_id)
+        
+#         if not capture_data:
+#             raise HTTPException(status_code=404, detail="Capture not found")
+        
+#         # Generate proxy URLs for GCS files (instead of signed URLs)
+#         if capture_data.get('input'):
+#             input_data = capture_data['input']
+            
+#             # Screenshot - Convert GCS path to proxy URL
+#             if input_data:
+#                 storage = StorageService()
+            
+#             # Screenshot - Generate signed URL
+#             if input_data.get('screenshot_path'):
+#                 screenshot_path = input_data['screenshot_path']
+#                 try:
+#                     signed_url = storage.generate_signed_url(screenshot_path, expiration=3600)
+#                     input_data['screenshot_signed_url'] = signed_url
+#                     input_data['screenshot_url'] = signed_url
+#                     print(f"[API] Generated signed URL for screenshot: {screenshot_path}")
+#                 except Exception as e:
+#                     print(f"[ERROR] Failed to generate screenshot signed URL: {e}")
+            
+            
+#             # Audio - Generate signed URL
+#             if input_data.get('audio_path'):
+#                 audio_path = input_data['audio_path']
+#                 try:
+#                     signed_url = storage.generate_signed_url(audio_path, expiration=3600)
+#                     input_data['audio_signed_url'] = signed_url
+#                     input_data['audio_url'] = signed_url
+#                     print(f"[API] Generated signed URL for audio: {audio_path}")
+#                 except Exception as e:
+#                     print(f"[ERROR] Failed to generate audio signed URL: {e}")
+        
+#             # Handle attached files
+#             if capture_data.get('attached_files'):
+#                 storage = StorageService()
+#                 for file in capture_data['attached_files']:
+#                     if file.get('gcs_path'):
+#                         try:
+#                             signed_url = storage.generate_signed_url(file['gcs_path'], expiration=3600)
+#                             file['signed_url'] = signed_url
+#                             file['url'] = signed_url
+#                             print(f"[API] Generated signed URL for file: {file['gcs_path']}")
+#                         except Exception as e:
+#                             print(f"[ERROR] Failed to generate file signed URL: {e}")
+
+        
+#         timeline = capture_data.get("timeline", {})
+#         agents_completed = {
+#             "perception": bool(timeline.get("perception_completed")),
+#             "classification": bool(timeline.get("classification_completed")),
+#             "execution": bool(timeline.get("execution_completed")),
+#             "research": bool(timeline.get("research_completed")),
+#             "proactive": bool(timeline.get("proactive_completed")),
+#             "resources": bool(timeline.get("resources_completed"))
+#         }
+        
+#         response = {
+#             "success": True,
+#             "capture": capture_data,
+#             "metadata": {
+#                 "capture_id": capture_id,
+#                 "user_id": user_id,
+#                 "status": capture_data.get("status"),
+#                 "domain": capture_data.get("classification", {}).get("domain"),
+#                 "total_actions": capture_data.get("classification", {}).get("total_actions", 0),
+#                 "agents_completed": agents_completed,
+#                 "has_errors": len(capture_data.get("errors", [])) > 0
+#             }
+#         }
+        
+#         print(f"[API] Retrieved full capture {capture_id} with proxy URLs")
+#         return response
+        
+#     except HTTPException:
+#         raise
+#     except Exception as e:
+#         print(f"[ERROR] get_full_capture failed: {e}")
+#         import traceback
+#         traceback.print_exc()
+#         raise HTTPException(status_code=500, detail=str(e))
+
+
+def public_gcs_url(bucket: str, object_path: str) -> str:
+    return f"https://storage.googleapis.com/{bucket}/{object_path}"
+
 
 @app.get("/api/capture/{capture_id}/full")
 async def get_full_capture(
@@ -938,26 +1051,143 @@ async def get_full_capture(
 ):
     """
     Retrieves complete comprehensive capture with all agent results
-    
-    Returns full audit trail with:
-    - Raw input, Perception results, Classification results
-    - Execution results, Research, Proactive tips, Resources
-    - Complete timeline, Processing statistics
+    PLUS PUBLIC URLs for GCS files (NO signing)
     """
-    
+
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Unauthorized")
+
+    token = authorization.replace("Bearer ", "")
+    payload = jwt_manager.verify_jwt_token(token)
+    user_id = payload["user_id"]
+
+    try:
+        db = FirestoreService()
+        capture_data = await db.get_comprehensive_capture(user_id, capture_id)
+
+        if not capture_data:
+            raise HTTPException(status_code=404, detail="Capture not found")
+
+        # -------------------------------
+        # PUBLIC GCS URL GENERATION
+        # -------------------------------
+        bucket = "rag-gcs-bucket"
+
+        if capture_data.get("input"):
+            input_data = capture_data["input"]
+
+            # Screenshot
+            if input_data.get("screenshot_path"):
+                screenshot_path = input_data["screenshot_path"]
+                public_url = public_gcs_url(bucket, screenshot_path)
+                input_data["screenshot_url"] = public_url
+                print(f"[API] Using public URL for screenshot: {public_url}")
+
+            # Audio
+            if input_data.get("audio_path"):
+                audio_path = input_data["audio_path"]
+                public_url = public_gcs_url(bucket, audio_path)
+                input_data["audio_url"] = public_url
+                print(f"[API] Using public URL for audio: {public_url}")
+
+        # Attached files
+        if capture_data.get("attached_files"):
+            for file in capture_data["attached_files"]:
+                if file.get("gcs_path"):
+                    public_url = public_gcs_url(bucket, file["gcs_path"])
+                    file["url"] = public_url
+                    print(f"[API] Using public URL for file: {public_url}")
+
+        # -------------------------------
+        # Agent completion metadata
+        # -------------------------------
+        timeline = capture_data.get("timeline", {})
+        agents_completed = {
+            "perception": bool(timeline.get("perception_completed")),
+            "classification": bool(timeline.get("classification_completed")),
+            "execution": bool(timeline.get("execution_completed")),
+            "research": bool(timeline.get("research_completed")),
+            "proactive": bool(timeline.get("proactive_completed")),
+            "resources": bool(timeline.get("resources_completed")),
+        }
+
+        response = {
+            "success": True,
+            "capture": capture_data,
+            "metadata": {
+                "capture_id": capture_id,
+                "user_id": user_id,
+                "status": capture_data.get("status"),
+                "domain": capture_data.get("classification", {}).get("domain"),
+                "total_actions": capture_data.get("classification", {}).get("total_actions", 0),
+                "agents_completed": agents_completed,
+                "has_errors": len(capture_data.get("errors", [])) > 0,
+            },
+        }
+
+        print(f"[API] Retrieved full capture {capture_id} with PUBLIC GCS URLs")
+        return response
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"[ERROR] get_full_capture failed: {e}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/v2/capture/{capture_id}/full")
+async def get_full_capture_v2(
+    capture_id: str,
+    authorization: str = Header(None)
+):
     if not authorization or not authorization.startswith("Bearer "):
         raise HTTPException(status_code=401, detail="Unauthorized")
     
     token = authorization.replace("Bearer ", "")
-    payload = jwt_manager.verify_jwt_token(token)
-    user_id = payload["user_id"]
     
     try:
-        db = FirestoreService()
-        capture_data = await db.get_comprehensive_capture(user_id, capture_id)
+        payload = jwt_manager.verify_jwt_token(token)
+        user_id = payload["user_id"]
+    except Exception as e:
+        raise HTTPException(status_code=401, detail=f"Invalid token: {str(e)}")
+    
+    try:
+        db = FirestoreService()  # REMOVE THE IMPORT LINE
+        
+        print(f"[API V2] Fetching enhanced capture: {capture_id}")
+        
+        capture_data = await db.get_enhanced_capture_data(user_id, capture_id)
         
         if not capture_data:
             raise HTTPException(status_code=404, detail="Capture not found")
+        
+        bucket = "rag-gcs-bucket"
+        
+        if capture_data.get('input'):
+            input_data = capture_data['input']
+            
+            if input_data.get('screenshot_path'):
+                screenshot_path = input_data['screenshot_path']
+                public_url = f"https://storage.googleapis.com/{bucket}/{screenshot_path}"
+                input_data['screenshot_signed_url'] = public_url
+                input_data['screenshot_url'] = public_url
+                print(f"[API V2] Using public URL for screenshot: {public_url}")
+            
+            if input_data.get('audio_path'):
+                audio_path = input_data['audio_path']
+                public_url = f"https://storage.googleapis.com/{bucket}/{audio_path}"
+                input_data['audio_signed_url'] = public_url
+                input_data['audio_url'] = public_url
+                print(f"[API V2] Using public URL for audio: {public_url}")
+        
+        if capture_data.get('attached_files'):
+            for file in capture_data['attached_files']:
+                if file.get('gcs_path'):
+                    public_url = f"https://storage.googleapis.com/{bucket}/{file['gcs_path']}"
+                    file['signed_url'] = public_url
+                    file['url'] = public_url
         
         timeline = capture_data.get("timeline", {})
         agents_completed = {
@@ -971,6 +1201,7 @@ async def get_full_capture(
         
         response = {
             "success": True,
+            "version": "v2",
             "capture": capture_data,
             "metadata": {
                 "capture_id": capture_id,
@@ -979,17 +1210,23 @@ async def get_full_capture(
                 "domain": capture_data.get("classification", {}).get("domain"),
                 "total_actions": capture_data.get("classification", {}).get("total_actions", 0),
                 "agents_completed": agents_completed,
-                "has_errors": len(capture_data.get("errors", [])) > 0
+                "has_errors": len(capture_data.get("errors", [])) > 0,
+                "has_research": bool(capture_data.get('research', {}).get('sources')),
+                "has_resources": bool(capture_data.get('resources', {}).get('resources')),
+                "research_sources_count": len(capture_data.get('research', {}).get('sources', [])),
+                "resources_count": len(capture_data.get('resources', {}).get('resources', []))
             }
         }
         
-        print(f"[API] Retrieved full capture {capture_id}")
+        print(f"[API V2] Enhanced capture ready")
         return response
         
     except HTTPException:
         raise
     except Exception as e:
-        print(f"[ERROR] get_full_capture failed: {e}")
+        print(f"[ERROR] get_full_capture_v2 failed: {e}")
+        import traceback
+        traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -3308,7 +3545,275 @@ async def get_proactive_notifications(authorization: str = Header(None)):
         print(f"[API] Proactive notifications failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))
     
+
+
+@app.get("/api/debug/firestore-schema")
+async def debug_firestore_schema(authorization: str = Header(None)):
+    """Debug endpoint - See actual Firestore structure"""
     
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    
+    token = authorization.replace("Bearer ", "")
+    payload = jwt_manager.verify_jwt_token(token)
+    user_id = payload["user_id"]
+    
+    try:
+        db = FirestoreService()
+        
+        schema = {
+            "collections": {}
+        }
+        
+        # Check each collection
+        collections = [
+            'memories',
+            'comprehensive_captures',
+            'captures',
+            'notes',
+            'research_results',
+            'shopping_lists',
+            'task_resources'
+        ]
+        
+        for coll_name in collections:
+            try:
+                coll_ref = db._get_user_ref(user_id).collection(coll_name)
+                docs = list(coll_ref.limit(2).stream())
+                
+                if len(docs) > 0:
+                    # Get first document
+                    first_doc = docs[0].to_dict()
+                    
+                    # Recursively get structure
+                    schema["collections"][coll_name] = {
+                        "count": len(docs),
+                        "sample_id": docs[0].id,
+                        "structure": get_schema_structure(first_doc)
+                    }
+                else:
+                    schema["collections"][coll_name] = {"count": 0}
+                    
+            except Exception as e:
+                schema["collections"][coll_name] = {"error": str(e)}
+        
+        return schema
+        
+    except Exception as e:
+        return {"error": str(e)}
+
+
+def get_schema_structure(obj, depth=0, max_depth=3):
+    """Recursively get structure of nested dict"""
+    
+    if depth > max_depth:
+        return "..."
+    
+    if isinstance(obj, dict):
+        result = {}
+        for key, value in obj.items():
+            if isinstance(value, dict):
+                result[key] = get_schema_structure(value, depth + 1, max_depth)
+            elif isinstance(value, list):
+                if len(value) > 0:
+                    result[key] = [get_schema_structure(value[0], depth + 1, max_depth)]
+                else:
+                    result[key] = []
+            else:
+                result[key] = f"<{type(value).__name__}>"
+        return result
+    elif isinstance(obj, list):
+        if len(obj) > 0:
+            return [get_schema_structure(obj[0], depth + 1, max_depth)]
+        return []
+    else:
+        return f"<{type(obj).__name__}>"
+    
+@app.get("/api/debug/schema-all")
+async def debug_schema_all():
+    """Debug endpoint - Get schema for ALL collections (REMOVE IN PRODUCTION!)"""
+    
+    # Hardcode your user ID for testing
+    user_id = "104141873915987258012"
+    
+    try:
+        db = FirestoreService()
+        user_ref = db._get_user_ref(user_id)
+        
+        schema = {}
+        
+        # List of all possible collections
+        collections = [
+            'comprehensive_captures',
+            'memories',
+            'captures',
+            'notes',
+            'research_results',
+            'shopping_lists',
+            'task_resources',
+            'learning_items'
+        ]
+        
+        for coll_name in collections:
+            try:
+                coll_ref = user_ref.collection(coll_name)
+                docs = list(coll_ref.limit(1).stream())
+                
+                if len(docs) == 0:
+                    schema[coll_name] = {"status": "empty", "count": 0}
+                    continue
+                
+                doc = docs[0]
+                data = doc.to_dict()
+                
+                # Get field names and types
+                field_info = {}
+                for key, value in data.items():
+                    if isinstance(value, dict):
+                        field_info[key] = {
+                            "type": "dict",
+                            "keys": list(value.keys())[:10]  # First 10 keys
+                        }
+                    elif isinstance(value, list):
+                        field_info[key] = {
+                            "type": "list",
+                            "length": len(value),
+                            "sample": value[0] if len(value) > 0 else None
+                        }
+                    else:
+                        field_info[key] = {
+                            "type": type(value).__name__,
+                            "sample": str(value)[:100] if isinstance(value, str) else value
+                        }
+                
+                schema[coll_name] = {
+                    "status": "found",
+                    "document_id": doc.id,
+                    "field_count": len(data),
+                    "fields": field_info,
+                    "full_sample": data  # Complete first document
+                }
+                
+            except Exception as e:
+                schema[coll_name] = {
+                    "status": "error",
+                    "error": str(e)
+                }
+        
+        return {
+            "user_id": user_id,
+            "collections": schema
+        }
+        
+    except Exception as e:
+        import traceback
+        return {
+            "error": str(e),
+            "traceback": traceback.format_exc()
+        }
+    
+
+@app.get("/api/storage/download")
+async def get_signed_url(
+    path: str = Query(..., description="GCS file path"),
+    authorization: str = Header(None)
+):
+    """
+    Generate a signed URL for a GCS file
+    Allows temporary access to private storage files
+    """
+    
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    
+    token = authorization.replace("Bearer ", "")
+    try:
+        payload = jwt_manager.verify_jwt_token(token)
+        user_id = payload["user_id"]
+    except Exception as e:
+        raise HTTPException(status_code=401, detail=f"Invalid token: {str(e)}")
+    
+    try:
+        from services.storage_service import StorageService
+        storage = StorageService()
+        
+        # Generate signed URL (valid for 1 hour)
+        signed_url = storage.generate_signed_url(path, expiration=3600)
+        
+        print(f"[STORAGE] Generated signed URL for: {path}")
+        
+        # Redirect to signed URL
+        from fastapi.responses import RedirectResponse
+        return RedirectResponse(url=signed_url)
+        
+    except Exception as e:
+        print(f"[ERROR] Failed to generate signed URL: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/storage/file/{user_id}/{folder}/{filename}")
+async def proxy_gcs_file(
+    user_id: str,
+    folder: str,
+    filename: str,
+    authorization: str = Header(None)
+):
+    """
+    Proxy GCS files through backend
+    No signed URLs needed - backend has access
+    """
+    
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    
+    token = authorization.replace("Bearer ", "")
+    try:
+        payload = jwt_manager.verify_jwt_token(token)
+        request_user_id = payload["user_id"]
+        
+        # Security: Only allow users to access their own files
+        if user_id != request_user_id:
+            raise HTTPException(status_code=403, detail="Access denied")
+    except Exception as e:
+        raise HTTPException(status_code=401, detail=f"Invalid token: {str(e)}")
+    
+    try:
+        from services.storage_service import StorageService
+        storage = StorageService()
+        
+        # Construct GCS path
+        gcs_path = f"users/{user_id}/{folder}/{filename}"
+        
+        # Download file from GCS
+        blob = storage.bucket.blob(gcs_path)
+        
+        if not blob.exists():
+            raise HTTPException(status_code=404, detail="File not found")
+        
+        # Get file content
+        file_bytes = blob.download_as_bytes()
+        
+        # Determine content type
+        content_type = blob.content_type or "application/octet-stream"
+        
+        print(f"[STORAGE PROXY] Serving file: {gcs_path}")
+        
+        # Return file as streaming response
+        return StreamingResponse(
+            io.BytesIO(file_bytes),
+            media_type=content_type,
+            headers={
+                "Content-Disposition": f'inline; filename="{filename}"'
+            }
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"[ERROR] Failed to proxy file: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+    
+
 # if __name__ == "__main__":
 #     import uvicorn
 #     print("[STARTUP] LifeOS Multi-Agent System v2.0")
