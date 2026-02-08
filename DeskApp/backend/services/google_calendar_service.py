@@ -1,6 +1,7 @@
 """
 LifeOS - Google Calendar Integration
 Handles calendar event creation with smart features
+ALL EVENTS NOW STORE capture_id (not source_capture_id)
 """
 from datetime import datetime, timedelta
 from typing import Dict, Optional, List
@@ -62,7 +63,7 @@ class GoogleCalendarService:
         description: Optional[str] = None,
         location: Optional[str] = None,
         attendees: Optional[List[str]] = None,
-        source_capture_id: Optional[str] = None,
+        capture_id: Optional[str] = None,
         user_timezone: str = "UTC",
         send_invites: bool = False
     ) -> Dict:
@@ -127,7 +128,7 @@ class GoogleCalendarService:
             
             print(f"[CALENDAR] Created event '{title}' in Google Calendar")
             
-            # Save to Firestore
+            # Save to Firestore with capture_id (NOT source_capture_id)
             event_data = {
                 "title": title,
                 "start_time": start_dt.isoformat(),
@@ -137,7 +138,7 @@ class GoogleCalendarService:
                 "attendees": attendees or [],
                 "google_calendar_id": google_event_id,
                 "google_calendar_link": google_event_link,
-                "source_capture_id": source_capture_id,
+                "capture_id": capture_id,  # ✅ Unified field name
                 "created_by_agent": "agent_3_orchestrator",
                 "status": "synced",
                 "created_at": datetime.utcnow().isoformat()
@@ -146,14 +147,15 @@ class GoogleCalendarService:
             doc_ref = self.db._get_user_ref(self.user_id).collection("google_calendar_events").document()
             doc_ref.set(event_data)
             
-            print(f"[FIRESTORE] Saved calendar event reference")
+            print(f"[FIRESTORE] Saved calendar event reference (capture: {capture_id})")
             
             return {
                 "status": "success",
                 "message": f"Event '{title}' created successfully",
                 "google_event_id": google_event_id,
                 "google_link": google_event_link,
-                "firestore_id": doc_ref.id,
+                "firestore_doc_id": doc_ref.id,
+                "capture_id": capture_id,
                 "start_time": start_dt.isoformat(),
                 "end_time": end_dt.isoformat()
             }

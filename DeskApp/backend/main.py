@@ -510,7 +510,7 @@ async def handle_capture(
         
         # Create comprehensive capture record with GCS paths
         comprehensive_capture = CaptureRecord(
-            id=capture_id,
+            capture_id=capture_id,  # CORRECT FIELD NAME
             user_id=user_id,
             capture_type=capture_type,
             input=RawInput(
@@ -528,6 +528,7 @@ async def handle_capture(
                 audio_duration_seconds=None
             )
         )
+
         
         comprehensive_capture.timeline.capture_received = datetime.utcnow()
 
@@ -608,7 +609,7 @@ async def handle_capture(
         
         # Create legacy format capture for backward compatibility
         capture_doc = Capture(
-            id=capture_id,
+            capture_id=capture_id,  #  CORRECT FIELD NAME
             user_id=user_id,
             capture_type=capture_type,
             screenshot_path=screenshot_upload_result.get('path') if screenshot_upload_result else None,
@@ -622,11 +623,11 @@ async def handle_capture(
             )
         )
 
+
         primary_action = classification.actions[0] if classification.actions else None
         
         memory_doc = Memory(
-            id=capture_id,
-            capture_ref=capture_id,
+            capture_id=capture_id,  #  UNIFIED FIELD
             user_id=user_id,
             title=classification.overall_summary,
             one_line_summary=classification.overall_summary,
@@ -641,6 +642,7 @@ async def handle_capture(
             task_context=primary_action.notes if primary_action else "",
             attendee_emails=primary_action.attendee_emails if primary_action else []
         )
+
 
         await db.save_capture(capture_doc)
         await db.save_memory(memory_doc)
@@ -2847,7 +2849,7 @@ Tags: {', '.join(memory_data.get('tags', []))}"""
         # Generate answer using Gemini
         import google.generativeai as genai
         genai.configure(api_key=settings.GOOGLE_API_KEY)
-        model = genai.GenerativeModel('gemini-3-flash-preview')
+        model = genai.GenerativeModel('gemini-2.5-flash')
         
         prompt = f"""You are an intelligent assistant helping users find information about their captured items.
 

@@ -7,16 +7,16 @@ class GeminiModels:
     """Centralized Gemini 3 model configuration"""
     
     # PRIMARY MODEL - Gemini 3 Flash Preview (required for hackathon)
-    PRIMARY_MODEL = "gemini-3-flash-preview"
+    PRIMARY_MODEL = "gemini-2.5-flash"
     
     # ALTERNATIVE - Gemini 3 Pro Preview (higher quality, slower)
     PRO_MODEL = "gemini-3-pro-preview"
     
     # For vision/OCR tasks
-    VISION_MODEL = "gemini-3-flash-preview"
+    VISION_MODEL = "gemini-2.5-flash"
     
     # For audio transcription (use Gemini 3 if available, fallback to 2.5)
-    AUDIO_MODEL = "gemini-3-flash-preview"
+    AUDIO_MODEL = "gemini-2.5-flash"
     
     # For embeddings (latest)
     EMBEDDING_MODEL = "text-embedding-004"
