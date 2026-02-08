@@ -1,6 +1,7 @@
 """
 LifeOS - Comprehensive Capture Model
 Stores complete end-to-end processing details for full transparency
+ALL MODELS NOW USE capture_id (not id)
 """
 from pydantic import BaseModel, Field
 from typing import Optional, List, Dict, Any
@@ -115,6 +116,7 @@ class ExecutedAction(BaseModel):
 
 class ExecutionResult(BaseModel):
     """Output from Agent 3 (Orchestrator)"""
+    has_data: bool = Field(default=False, description="Flag: execution_results/{capture_id} exists")
     total_actions: int = Field(default=0)
     successful: int = Field(default=0)
     failed: int = Field(default=0)
@@ -131,6 +133,7 @@ class ExecutionResult(BaseModel):
 
 class ResearchResult(BaseModel):
     """Output from Agent 4 (Research)"""
+    has_data: bool = Field(default=False, description="Flag: research_results/{capture_id} exists")
     triggered: bool = Field(default=False)
     trigger_reason: Optional[str] = Field(None, description="Why research was triggered")
     query: str = Field(default="")
@@ -139,8 +142,6 @@ class ResearchResult(BaseModel):
     results_summary: str = Field(default="", description="Brief summary")
     sources_count: int = Field(default=0)
     sources: List[Dict[str, str]] = Field(default_factory=list, description="List of {title, url}")
-    saved_to_firestore: bool = Field(default=False)
-    firestore_doc_id: Optional[str] = Field(None)
     processing_time_ms: int = Field(default=0)
     started_at: Optional[datetime] = Field(None)
     completed_at: Optional[datetime] = Field(None)
@@ -180,6 +181,7 @@ class FoundResource(BaseModel):
 
 class ResourcesResult(BaseModel):
     """Output from Agent 8 (Resource Finder)"""
+    has_data: bool = Field(default=False, description="Flag: task_resources/{capture_id} exists")
     triggered: bool = Field(default=False)
     trigger_reason: Optional[str] = Field(None)
     needs_resources: bool = Field(default=False)
@@ -188,8 +190,6 @@ class ResourcesResult(BaseModel):
     resources_count: int = Field(default=0)
     learning_path: str = Field(default="", description="Suggested learning path")
     summary: str = Field(default="")
-    saved_to_firestore: bool = Field(default=False)
-    firestore_doc_id: Optional[str] = Field(None)
     processing_time_ms: int = Field(default=0)
     started_at: Optional[datetime] = Field(None)
     completed_at: Optional[datetime] = Field(None)
@@ -234,10 +234,11 @@ class CaptureRecord(BaseModel):
     """
     Comprehensive Capture Record
     Stores EVERYTHING about a capture for full transparency
+    UNIFIED: Uses capture_id everywhere (not id)
     """
     
     # ========== IDENTIFIERS ==========
-    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    capture_id: str = Field(default_factory=lambda: str(uuid.uuid4()), description="UNIFIED ID")
     user_id: str = Field(..., description="Owner of this capture")
     capture_type: str = Field(..., description="screenshot, audio, text_note, multi-modal")
     
@@ -265,6 +266,12 @@ class CaptureRecord(BaseModel):
     
     # ========== REFERENCES ==========
     memory_id: Optional[str] = Field(None, description="Reference to Memory document")
+    
+    # Backward compatibility alias
+    @property
+    def id(self) -> str:
+        """Backward compatibility: return capture_id when accessing .id"""
+        return self.capture_id
     
     def add_error(self, agent: str, error: str, details: Dict = None):
         """Add an error to the record"""
@@ -305,7 +312,7 @@ class CaptureMetadata(BaseModel):
 
 class Capture(BaseModel):
     """DEPRECATED: Use CaptureRecord instead"""
-    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    capture_id: str = Field(default_factory=lambda: str(uuid.uuid4()), description="UNIFIED ID")
     user_id: str = Field(...)
     capture_type: str = Field(...)
     screenshot_path: Optional[str] = Field(None)
@@ -314,3 +321,9 @@ class Capture(BaseModel):
     context: CaptureMetadata = Field(default_factory=CaptureMetadata)
     created_at: datetime = Field(default_factory=datetime.utcnow)
     status: str = Field(default="processing")
+    
+    # Backward compatibility alias
+    @property
+    def id(self) -> str:
+        """Backward compatibility: return capture_id when accessing .id"""
+        return self.capture_id

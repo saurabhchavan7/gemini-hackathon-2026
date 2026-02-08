@@ -1,6 +1,7 @@
 """
 LifeOS - Agent 3: Universal Orchestrator (Multi-Action Processing)
 Role: Process ALL actions from a capture intelligently
+NOW PASSES capture_id to ALL tools
 """
 from datetime import datetime, timedelta
 import re
@@ -63,6 +64,7 @@ class PlanningAgent(AgentBase):
             "overall_summary": str,
             "primary_intent": str,
             "user_id": str,
+            "capture_id": str,
             "user_timezone": str,
             "full_context": str
         }
@@ -86,6 +88,7 @@ class PlanningAgent(AgentBase):
                 actions=actions,
                 domain=domain,
                 user_id=user_id,
+                capture_id=intent_data.get('capture_id'),
                 user_timezone=user_timezone,
                 full_context=full_context
             )
@@ -99,6 +102,7 @@ class PlanningAgent(AgentBase):
         actions: list,
         domain: str,
         user_id: str,
+        capture_id: str,
         user_timezone: str,
         full_context: str
     ) -> dict:
@@ -146,6 +150,7 @@ class PlanningAgent(AgentBase):
                     summary=summary,
                     domain=domain,
                     user_id=user_id,
+                    capture_id=capture_id,
                     user_timezone=user_timezone,
                     priority=priority,
                     due_date=due_date,
@@ -167,9 +172,13 @@ class PlanningAgent(AgentBase):
                 print(f"[ERROR] Action {i} failed: {e}")
                 results.append({"action": summary, "intent": intent, "result": {"status": "error", "message": str(e)}})
         
-        # Summary
+        # Summary (OUTSIDE the for loop!)
         success_count = sum(1 for r in results if r.get('result', {}).get('status') == 'success')
         print(f"[Agent 3] Completed: {success_count}/{len(actions)} actions successful")
+        
+        # Save execution results using capture_id
+        if capture_id and user_id:
+            await self._save_execution_results(user_id, capture_id, results)
         
         return {
             "status": "success" if success_count > 0 else "error",
@@ -177,6 +186,104 @@ class PlanningAgent(AgentBase):
             "successful": success_count,
             "results": results
         }
+    
+    async def _save_execution_results(
+        self,
+        user_id: str,
+        capture_id: str,
+        results: list
+    ) -> bool:
+        """Save execution results to separate collection using capture_id"""
+        try:
+            from services.firestore_service import FirestoreService
+            
+            db = FirestoreService()
+            
+            # Build execution summary
+            execution_doc = {
+                "capture_id": capture_id,
+                "actions": [],
+                "created_at": datetime.utcnow().isoformat()
+            }
+            
+            for r in results:
+                result_data = r.get('result', {})
+                
+                action_entry = {
+                    "intent": r.get('intent'),
+                    "summary": r.get('action'),
+                    "status": result_data.get('status', 'unknown'),
+                    "google_task_id": result_data.get('google_task_id'),
+                    "google_event_id": result_data.get('google_event_id'),
+                    "google_calendar_link": result_data.get('google_link'),
+                    "firestore_doc_id": result_data.get('firestore_doc_id'),
+                    "error_message": result_data.get('message') if result_data.get('status') == 'error' else None
+                }
+                
+                execution_doc["actions"].append(action_entry)
+            
+            # Save to execution_results/{capture_id}
+            doc_ref = db._get_user_ref(user_id).collection("execution_results").document(capture_id)
+            doc_ref.set(execution_doc)
+            
+            print(f"[Agent 3] Saved execution to: execution_results/{capture_id}")
+            
+            # Update main capture with simple flag
+            success_count = sum(1 for r in results if r.get('result', {}).get('status') == 'success')
+            
+            field_updates = {
+                "execution.has_data": True,
+                "execution.total_actions": len(results),
+                "execution.successful": success_count,
+                "execution.failed": len(results) - success_count,
+                "execution.completed_at": datetime.utcnow().isoformat(),
+                "timeline.execution_completed": datetime.utcnow().isoformat()
+            }
+            
+            await db.update_capture_fields(user_id, capture_id, field_updates)
+            print(f"[Agent 3] ✓ Execution linked to capture {capture_id}")
+            
+            return True
+            
+        except Exception as e:
+            print(f"[Agent 3] WARNING: Failed to save execution: {e}")
+            return False
+
+    async def _process_single_intent(self, intent_data: dict) -> dict:
+        """Backward compatibility: Process old single-intent format"""
+        
+        # Convert old format to new action format
+        action = {
+            "intent": intent_data.get('intent', 'remember'),
+            "summary": intent_data.get('summary', ''),
+            "priority": intent_data.get('priority', 3),
+            "due_date": None,
+            "event_time": None,
+            "attendee_emails": intent_data.get('attendee_emails', []),
+            "notes": intent_data.get('task_context', ''),
+            "tags": intent_data.get('tags', [])
+        }
+        
+        # If there are actionable_items, create multiple actions
+        actionable_items = intent_data.get('actionable_items', [])
+        if actionable_items:
+            actions = []
+            for item in actionable_items[:5]:
+                actions.append({
+                    **action,
+                    "summary": item
+                })
+        else:
+            actions = [action]
+        
+        return await self._process_multiple_actions(
+            actions=actions,
+            domain=intent_data.get('domain', 'ideas_thoughts'),
+            user_id=intent_data.get('user_id'),
+            capture_id=intent_data.get('capture_id'),
+            user_timezone=intent_data.get('user_timezone', 'UTC'),
+            full_context=intent_data.get('full_context', '')
+        )
 
     async def _execute_action(
         self,
@@ -184,6 +291,7 @@ class PlanningAgent(AgentBase):
         summary: str,
         domain: str,
         user_id: str,
+        capture_id: str,
         user_timezone: str,
         priority: int,
         due_date: str,
@@ -222,7 +330,8 @@ class PlanningAgent(AgentBase):
                     item_type="appointment",
                     date_time=parsed_time,
                     notes=notes,
-                    add_to_calendar=True
+                    add_to_calendar=True,
+                    capture_id=capture_id
                 )
             elif domain == "family_relationships":
                 return await create_family_event(
@@ -232,7 +341,8 @@ class PlanningAgent(AgentBase):
                     date_time=parsed_time,
                     person=attendee_names[0] if attendee_names else None,
                     notes=notes,
-                    add_to_calendar=True
+                    add_to_calendar=True,
+                    capture_id=capture_id
                 )
             else:
                 # Standard calendar event
@@ -246,7 +356,8 @@ class PlanningAgent(AgentBase):
                     user_timezone=user_timezone,
                     attendees=attendee_emails if attendee_emails else None,
                     send_invites=send_invite and bool(attendee_emails),
-                    domain=domain
+                    domain=domain,
+                    capture_id=capture_id
                 )
         
         # ==========================================
@@ -263,7 +374,8 @@ class PlanningAgent(AgentBase):
                     title=summary,
                     item_type="assignment",
                     notes=notes,
-                    due_date=parsed_due
+                    due_date=parsed_due,
+                    capture_id=capture_id
                 )
             else:
                 return await create_task(
@@ -272,7 +384,8 @@ class PlanningAgent(AgentBase):
                     notes=notes if notes else f"Priority: {priority}",
                     due_date=parsed_due,
                     domain=domain,
-                    priority=priority
+                    priority=priority,
+                    capture_id=capture_id
                 )
         
         # ==========================================
@@ -286,7 +399,8 @@ class PlanningAgent(AgentBase):
                 bill_name=summary,
                 amount=amount or 0.0,
                 due_date=self._parse_date(due_date),
-                category=self._categorize_bill(summary + " " + notes)
+                category=self._categorize_bill(summary + " " + notes),
+                capture_id=capture_id
             )
         
         # ==========================================
@@ -300,14 +414,16 @@ class PlanningAgent(AgentBase):
                     user_id=user_id,
                     title=summary,
                     media_type=self._detect_media_type(summary + " " + notes),
-                    notes=notes
+                    notes=notes,
+                    capture_id=capture_id
                 )
             else:
                 return add_to_shopping_list(
                     user_id=user_id,
                     item_name=summary,
                     price=amount or 0.0,
-                    domain=domain
+                    domain=domain,
+                    capture_id=capture_id
                 )
         
         # ==========================================
@@ -322,28 +438,32 @@ class PlanningAgent(AgentBase):
                     title=summary,
                     item_type="record",
                     notes=notes,
-                    add_to_calendar=False
+                    add_to_calendar=False,
+                    capture_id=capture_id
                 )
             elif domain == "travel_movement":
                 return create_travel_item(
                     user_id=user_id,
                     title=summary,
                     item_type="info",
-                    notes=notes
+                    notes=notes,
+                    capture_id=capture_id
                 )
             elif domain == "entertainment_leisure":
                 return add_to_watchlist(
                     user_id=user_id,
                     title=summary,
                     media_type=self._detect_media_type(summary + " " + notes),
-                    notes=notes
+                    notes=notes,
+                    capture_id=capture_id
                 )
             elif domain == "admin_documents":
                 return await save_document(
                     user_id=user_id,
                     title=summary,
                     content=notes or full_context[:1000],
-                    notes=""
+                    notes="",
+                    capture_id=capture_id
                 )
             else:
                 return create_note(
@@ -351,7 +471,8 @@ class PlanningAgent(AgentBase):
                     title=summary,
                     content=notes or full_context[:1000],
                     domain=domain,
-                    tags=tags
+                    tags=tags,
+                    capture_id=capture_id
                 )
         
         # ==========================================
@@ -365,7 +486,8 @@ class PlanningAgent(AgentBase):
                 title=summary,
                 item_type="topic",
                 content=full_context[:1000],
-                notes=notes
+                notes=notes,
+                capture_id=capture_id
             )
         
         # ==========================================
@@ -378,7 +500,8 @@ class PlanningAgent(AgentBase):
                 user_id=user_id,
                 title=summary,
                 tracker_type=self._detect_tracker_type(summary + " " + notes),
-                domain=domain
+                domain=domain,
+                capture_id=capture_id
             )
         
         # ==========================================
@@ -392,7 +515,8 @@ class PlanningAgent(AgentBase):
                 title=f"Ref: {summary}",
                 content=notes or full_context[:2000],
                 domain=domain,
-                tags=tags + ["reference"]
+                tags=tags + ["reference"],
+                capture_id=capture_id
             )
         
         # ==========================================
@@ -413,7 +537,8 @@ class PlanningAgent(AgentBase):
                 user_id=user_id,
                 title=summary,
                 notes=notes or full_context[:1000],
-                domain=domain
+                domain=domain,
+                capture_id=capture_id
             )
         
         # ==========================================
@@ -427,7 +552,8 @@ class PlanningAgent(AgentBase):
                 title=summary,
                 remind_date=self._parse_date(due_date),
                 notes=notes,
-                domain=domain
+                domain=domain,
+                capture_id=capture_id
             )
         
         # ==========================================
@@ -441,7 +567,8 @@ class PlanningAgent(AgentBase):
                 title=summary,
                 waiting_for=attendee_names[0] if attendee_names else None,
                 notes=notes,
-                domain=domain
+                domain=domain,
+                capture_id=capture_id
             )
         
         # ==========================================
@@ -455,14 +582,16 @@ class PlanningAgent(AgentBase):
                     user_id=user_id,
                     title=summary,
                     content=notes or full_context[:1000],
-                    notes="Archived"
+                    notes="Archived",
+                    capture_id=capture_id
                 )
             else:
                 return archive_item(
                     user_id=user_id,
                     title=summary,
                     content=notes or full_context[:1000],
-                    domain=domain
+                    domain=domain,
+                    capture_id=capture_id
                 )
         
         # ==========================================
@@ -482,43 +611,9 @@ class PlanningAgent(AgentBase):
                 title=summary,
                 content=notes or full_context[:1000],
                 domain=domain,
-                tags=tags
+                tags=tags,
+                capture_id=capture_id
             )
-
-    async def _process_single_intent(self, intent_data: dict) -> dict:
-        """Backward compatibility: Process old single-intent format"""
-        
-        # Convert old format to new action format
-        action = {
-            "intent": intent_data.get('intent', 'remember'),
-            "summary": intent_data.get('summary', ''),
-            "priority": intent_data.get('priority', 3),
-            "due_date": None,
-            "event_time": None,
-            "attendee_emails": intent_data.get('attendee_emails', []),
-            "notes": intent_data.get('task_context', ''),
-            "tags": intent_data.get('tags', [])
-        }
-        
-        # If there are actionable_items, create multiple actions
-        actionable_items = intent_data.get('actionable_items', [])
-        if actionable_items:
-            actions = []
-            for item in actionable_items[:5]:
-                actions.append({
-                    **action,
-                    "summary": item
-                })
-        else:
-            actions = [action]
-        
-        return await self._process_multiple_actions(
-            actions=actions,
-            domain=intent_data.get('domain', 'ideas_thoughts'),
-            user_id=intent_data.get('user_id'),
-            user_timezone=intent_data.get('user_timezone', 'UTC'),
-            full_context=intent_data.get('full_context', '')
-        )
 
     # ==========================================
     # HELPER METHODS

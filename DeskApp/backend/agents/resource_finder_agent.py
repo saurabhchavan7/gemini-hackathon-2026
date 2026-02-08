@@ -277,6 +277,7 @@ class ResourceFinderAgent(AgentBase):
             print(f"[Agent 8] Resources needed: {decision.reasoning}")
             
             user_id = data.get('user_id')
+            capture_id = data.get('capture_id')
             task_title = data.get('summary', '')
             full_context = data.get('full_context', '')
             
@@ -300,6 +301,7 @@ class ResourceFinderAgent(AgentBase):
                     "generated_at": datetime.utcnow().isoformat(),
                     "status": "active",
                     "user_feedback": None,
+                    "capture_id": capture_id,
                     "metadata": {
                         "agent_version": "1.0",
                         "resource_count": result['resource_count'],
@@ -307,10 +309,33 @@ class ResourceFinderAgent(AgentBase):
                     }
                 }
                 
-                doc_ref = db._get_user_ref(user_id).collection("task_resources").document()
+                # Use capture_id as document ID (unified linkage)
+                if capture_id:
+                    doc_ref = db._get_user_ref(user_id).collection("task_resources").document(capture_id)
+                else:
+                    doc_ref = db._get_user_ref(user_id).collection("task_resources").document()
+                
                 doc_ref.set(resource_doc)
                 
-                print(f"[Agent 8] Saved {result['resource_count']} resources to Firestore")
+                print(f"[Agent 8] Saved resources to: task_resources/{doc_ref.id}")
+                
+                # Update main capture with flag
+                if capture_id:
+                    try:
+                        field_updates = {
+                            "resources.has_data": True,
+                            "resources.completed_at": datetime.utcnow().isoformat(),
+                            "resources.resources_count": result['resource_count'],
+                            "resources.summary": result['summary'][:500] if result.get('summary') else "",
+                            "timeline.resources_completed": datetime.utcnow().isoformat()
+                        }
+                        
+                        await db.update_capture_fields(user_id, capture_id, field_updates)
+                        print(f"[Agent 8] ✓ Resources linked to capture {capture_id}")
+                        
+                    except Exception as e:
+                        print(f"[Agent 8] WARNING: Failed to update capture: {e}")
+                
                 resource_titles = [r['title'][:50] for r in result['resources']]
                 print(f"[Agent 8] Resources: {resource_titles}")
             else:
