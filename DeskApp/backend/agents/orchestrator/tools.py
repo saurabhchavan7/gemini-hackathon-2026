@@ -45,7 +45,7 @@ def add_to_shopping_list(user_id: str, item_name: str, price: float = 0.0, domai
         return {"status": "error", "message": str(e)}
 
 
-def create_calendar_event(
+async def create_calendar_event(
     user_id: str, 
     event_title: str, 
     start_time: str,
@@ -63,6 +63,7 @@ def create_calendar_event(
     """
     try:
         calendar_service = GoogleCalendarService(user_id)
+        await calendar_service.initialize()  # ADD THIS LINE
         
         result = calendar_service.create_event(
             title=event_title,
@@ -89,10 +90,12 @@ def create_calendar_event(
         
     except Exception as e:
         print(f"[ERROR] create_calendar_event failed: {e}")
+        import traceback
+        traceback.print_exc()
         return {"status": "error", "message": str(e)}
 
 
-def create_task(
+async def create_task(
     user_id: str,
     task_title: str,
     notes: str = None,
@@ -106,6 +109,7 @@ def create_task(
     """
     try:
         tasks_service = GoogleTasksService(user_id)
+        await tasks_service.initialize()  # ADD THIS LINE
         
         result = tasks_service.create_task(
             title=task_title,
@@ -125,6 +129,8 @@ def create_task(
         
     except Exception as e:
         print(f"[ERROR] create_task failed: {e}")
+        import traceback
+        traceback.print_exc()
         return {"status": "error", "message": str(e)}
 
 
@@ -205,7 +211,7 @@ def add_to_bills(
         return {"status": "error", "message": str(e)}
 
 
-def create_health_item(
+async def create_health_item(
     user_id: str,
     title: str,
     item_type: str = "appointment",
@@ -239,7 +245,7 @@ def create_health_item(
         
         # Also create calendar event for appointments
         if add_to_calendar and date_time and item_type == "appointment":
-            calendar_result = create_calendar_event(
+            calendar_result = await create_calendar_event(
                 user_id=user_id,
                 event_title=f"Medical: {title}",
                 start_time=date_time,
@@ -334,7 +340,7 @@ def add_to_watchlist(
         return {"status": "error", "message": str(e)}
 
 
-def create_family_event(
+async def create_family_event(
     user_id: str,
     title: str,
     event_type: str = "event",
@@ -368,7 +374,7 @@ def create_family_event(
         
         # Add to calendar
         if add_to_calendar and date_time:
-            calendar_result = create_calendar_event(
+            calendar_result = await create_calendar_event(
                 user_id=user_id,
                 event_title=f"Family: {title}",
                 start_time=date_time,
@@ -467,7 +473,7 @@ def create_comparison(
         return {"status": "error", "message": str(e)}
 
 
-def create_reminder(
+async def create_reminder(
     user_id: str,
     title: str,
     remind_date: str = None,
@@ -479,7 +485,7 @@ def create_reminder(
     Creates a follow-up reminder as a Google Task
     """
     try:
-        result = create_task(
+        result = await create_task(
             user_id=user_id,
             task_title=f"Follow up: {title}",
             notes=notes,
@@ -495,7 +501,7 @@ def create_reminder(
         return {"status": "error", "message": str(e)}
 
 
-def create_waiting_item(
+async def create_waiting_item(
     user_id: str,
     title: str,
     waiting_for: str = None,
@@ -510,7 +516,7 @@ def create_waiting_item(
     try:
         task_notes = f"Waiting for: {waiting_for}\n{notes}" if waiting_for else notes
         
-        result = create_task(
+        result = await create_task(
             user_id=user_id,
             task_title=f"Waiting: {title}",
             notes=task_notes,
@@ -553,7 +559,7 @@ def archive_item(
         return {"status": "error", "message": str(e)}
 
 
-def save_document(
+async def save_document(
     user_id: str,
     title: str,
     doc_type: str = "general",
@@ -586,7 +592,7 @@ def save_document(
         
         # If has expiry, create reminder
         if expiry_date:
-            create_reminder(
+            await create_reminder(
                 user_id=user_id,
                 title=f"{title} expiring",
                 remind_date=expiry_date,
@@ -602,7 +608,7 @@ def save_document(
         return {"status": "error", "message": str(e)}
 
 
-def create_learning_item(
+async def create_learning_item(
     user_id: str,
     title: str,
     item_type: str = "topic",
@@ -635,7 +641,7 @@ def create_learning_item(
         
         # If it's an assignment with due date, also create task
         if item_type == "assignment" and due_date:
-            create_task(
+            await create_task(
                 user_id=user_id,
                 task_title=title,
                 notes=notes,

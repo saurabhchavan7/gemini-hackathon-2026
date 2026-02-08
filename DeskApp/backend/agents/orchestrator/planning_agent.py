@@ -216,7 +216,7 @@ class PlanningAgent(AgentBase):
             
             # Domain-specific calendar creation
             if domain == "health_wellbeing":
-                return create_health_item(
+                return await create_health_item(
                     user_id=user_id,
                     title=summary,
                     item_type="appointment",
@@ -225,7 +225,7 @@ class PlanningAgent(AgentBase):
                     add_to_calendar=True
                 )
             elif domain == "family_relationships":
-                return create_family_event(
+                return await create_family_event(
                     user_id=user_id,
                     title=summary,
                     event_type="event",
@@ -236,7 +236,7 @@ class PlanningAgent(AgentBase):
                 )
             else:
                 # Standard calendar event
-                return create_calendar_event(
+                return await create_calendar_event(
                     user_id=user_id,
                     event_title=summary,
                     start_time=parsed_time,
@@ -258,7 +258,7 @@ class PlanningAgent(AgentBase):
             parsed_due = self._parse_date(due_date) if due_date else None
             
             if domain == "education_learning":
-                return create_learning_item(
+                return await create_learning_item(
                     user_id=user_id,
                     title=summary,
                     item_type="assignment",
@@ -266,7 +266,7 @@ class PlanningAgent(AgentBase):
                     due_date=parsed_due
                 )
             else:
-                return create_task(
+                return await create_task(
                     user_id=user_id,
                     task_title=summary,
                     notes=notes if notes else f"Priority: {priority}",
@@ -317,7 +317,7 @@ class PlanningAgent(AgentBase):
             print(f"[Agent 3] REMEMBER: Saving to domain storage")
             
             if domain == "health_wellbeing":
-                return create_health_item(
+                return await create_health_item(
                     user_id=user_id,
                     title=summary,
                     item_type="record",
@@ -339,7 +339,7 @@ class PlanningAgent(AgentBase):
                     notes=notes
                 )
             elif domain == "admin_documents":
-                return save_document(
+                return await save_document(
                     user_id=user_id,
                     title=summary,
                     content=notes or full_context[:1000],
@@ -360,7 +360,7 @@ class PlanningAgent(AgentBase):
         elif intent == "learn":
             print(f"[Agent 3] LEARN: Creating learning item")
             
-            return create_learning_item(
+            return await create_learning_item(
                 user_id=user_id,
                 title=summary,
                 item_type="topic",
@@ -422,7 +422,7 @@ class PlanningAgent(AgentBase):
         elif intent == "follow_up":
             print(f"[Agent 3] FOLLOW_UP: Creating reminder")
             
-            return create_reminder(
+            return await create_reminder(
                 user_id=user_id,
                 title=summary,
                 remind_date=self._parse_date(due_date),
@@ -436,7 +436,7 @@ class PlanningAgent(AgentBase):
         elif intent == "wait":
             print(f"[Agent 3] WAIT: Creating waiting item")
             
-            return create_waiting_item(
+            return await create_waiting_item(
                 user_id=user_id,
                 title=summary,
                 waiting_for=attendee_names[0] if attendee_names else None,
@@ -451,7 +451,7 @@ class PlanningAgent(AgentBase):
             print(f"[Agent 3] ARCHIVE: Archiving item")
             
             if domain == "admin_documents":
-                return save_document(
+                return await save_document(
                     user_id=user_id,
                     title=summary,
                     content=notes or full_context[:1000],
