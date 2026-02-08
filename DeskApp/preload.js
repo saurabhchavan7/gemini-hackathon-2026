@@ -22,7 +22,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
 
   onProactiveNotificationData: (callback) =>
   ipcRenderer.on('proactive-notification-data', (_, data) => callback(data)),
-  
+ 
+  apiGetCaptureById: (captureId) => ipcRenderer.invoke('api-get-capture-by-id', captureId),
+  apiGetCaptureByIdV2: (captureId) => ipcRenderer.invoke('api-get-capture-v2', captureId),
+
   apiAskCapture: (captureId, question) => 
   ipcRenderer.invoke('api-ask-capture', captureId, question),
 

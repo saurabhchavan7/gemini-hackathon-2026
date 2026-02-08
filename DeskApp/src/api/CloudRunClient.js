@@ -400,6 +400,32 @@ async getProactiveNotifications() {
   }
 },
 
+async getCaptureById(captureId) {
+  try {
+    console.log(`🔍 [CloudRunClient] Fetching capture: ${captureId}`);
+    const response = await apiClient.get(`/api/capture/${captureId}/full`);
+    return { success: true, capture: response.data.capture };
+  } catch (error) {
+    console.error('❌ [CloudRunClient] Failed:', error.message);
+    return { success: false, error: error.message };
+  }
+},
+
+async getCaptureByIdV2(captureId) {
+  try {
+    console.log(`🔍 [CloudRunClient V2] Fetching enhanced capture: ${captureId}`);
+    const response = await apiClient.get(`/api/v2/capture/${captureId}/full`);
+    console.log(`✅ [CloudRunClient V2] Got ${response.data.metadata.research_sources_count} research sources`);
+    console.log(`📚 [CloudRunClient V2] Got ${response.data.metadata.resources_count} learning resources`);
+    return { success: true, capture: response.data.capture, metadata: response.data.metadata };
+  } catch (error) {
+    console.error('❌ [CloudRunClient V2] Failed:', error.message);
+    return { success: false, error: error.message };
+  }
+},
+
+
+
 };
 
 module.exports = CloudRunClient;

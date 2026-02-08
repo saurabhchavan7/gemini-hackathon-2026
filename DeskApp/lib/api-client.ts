@@ -47,3 +47,11 @@ export async function askQuestion(question: string, filterDomain?: string) {
   
   return (window as any).electronAPI.apiAskQuestion(question, filterDomain);
 }
+
+export async function getCaptureByIdV2(captureId: string) {
+  if (typeof window === 'undefined' || !(window as any).electronAPI) {
+    throw new Error('API client only available in Electron');
+  }
+  
+  return (window as any).electronAPI.apiGetCaptureByIdV2(captureId);
+}
