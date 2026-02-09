@@ -7,6 +7,7 @@ from google.genai import types
 from services.firestore_service import FirestoreService
 from typing import List, Dict, Any, Optional
 from datetime import datetime
+from core.config import settings
 
 
 class ResearchAgent(AgentBase):
@@ -36,7 +37,7 @@ ALWAYS:
         self.search_tool = types.Tool(google_search=types.GoogleSearch())
         
         super().__init__(
-            model_id="gemini-2.5-flash",
+            model_id=settings.RESEARCH_MODEL,
             system_instruction=system_instruction,
             tools=[self.search_tool]
         )

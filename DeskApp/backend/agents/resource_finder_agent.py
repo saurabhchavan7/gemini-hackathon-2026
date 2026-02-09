@@ -6,6 +6,7 @@ from agents.base import AgentBase
 from typing import List, Dict, Optional
 from datetime import datetime
 from pydantic import BaseModel, Field
+from core.config import settings
 import re
 
 class ResourceDecision(BaseModel):
@@ -62,7 +63,7 @@ class ResourceFinderAgent(AgentBase):
         self.search_tool = types.Tool(google_search=types.GoogleSearch())
         
         super().__init__(
-            model_id="gemini-2.5-flash",
+            model_id=settings.PRIMARY_MODEL,
             system_instruction=self.decision_instruction,
             tools=None
         )
@@ -92,7 +93,7 @@ class ResourceFinderAgent(AgentBase):
             client = genai.Client(api_key=settings.GOOGLE_API_KEY)
             
             response = client.models.generate_content(
-                model="gemini-2.5-flash",
+                model=settings.PRIMARY_MODEL,
                 contents=prompt,
                 config=types.GenerateContentConfig(
                     system_instruction=self.decision_instruction,
@@ -149,7 +150,7 @@ class ResourceFinderAgent(AgentBase):
             print("[Agent 8] Step 1: Searching web")
             
             search_response = search_client.models.generate_content(
-                model="gemini-2.5-flash",
+                model=settings.PRIMARY_MODEL,
                 contents=search_prompt,
                 config=types.GenerateContentConfig(
                     system_instruction=self.search_instruction,
@@ -184,7 +185,7 @@ class ResourceFinderAgent(AgentBase):
             )
             
             parse_response = parse_client.models.generate_content(
-                model="gemini-2.5-flash",
+                model=settings.PRIMARY_MODEL,
                 contents=parse_prompt,
                 config=types.GenerateContentConfig(
                     system_instruction=self.parse_instruction,

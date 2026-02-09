@@ -7,6 +7,9 @@ from pathlib import Path
 from dotenv import load_dotenv
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+# Import model configurations from models_config.py
+from . import models_config
+
 # Get the absolute path to the .env file
 env_path = Path(__file__).resolve().parent.parent / ".env"
 load_dotenv(dotenv_path=env_path)
@@ -16,11 +19,18 @@ class Settings(BaseSettings):
     PROJECT_ID: str = os.getenv("GCP_PROJECT_ID", "")
     LOCATION: str = os.getenv("GCP_LOCATION", "us-central1")
     
-    # Gemini Model Versions
-    PERCEPTION_MODEL: str = "gemini-2.5-flash"
-    COGNITION_MODEL: str = "gemini-2.5-flash"
-    ORCHESTRATOR_MODEL: str = "gemini-2.5-flash"
-    RESEARCH_MODEL: str = "gemini-2.5-flash"
+    # Gemini Model Versions (loaded from models_config.py - visible in repo for judges)
+    PRIMARY_MODEL: str = models_config.GEMINI_PRIMARY_MODEL
+    PRO_MODEL: str = models_config.GEMINI_PRO_MODEL
+    VISION_MODEL: str = models_config.GEMINI_VISION_MODEL
+    AUDIO_MODEL: str = models_config.GEMINI_AUDIO_MODEL
+    EMBEDDING_MODEL: str = models_config.GEMINI_EMBEDDING_MODEL
+
+    # Agent-specific models (loaded from models_config.py)
+    PERCEPTION_MODEL: str = models_config.GEMINI_PERCEPTION_MODEL
+    COGNITION_MODEL: str = models_config.GEMINI_COGNITION_MODEL
+    ORCHESTRATOR_MODEL: str = models_config.GEMINI_ORCHESTRATOR_MODEL
+    RESEARCH_MODEL: str = models_config.GEMINI_RESEARCH_MODEL
     
     # Firestore Collection Names
     COLLECTION_CAPTURES: str = "captures"

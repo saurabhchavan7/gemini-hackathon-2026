@@ -1,0 +1,123 @@
+========================================
+MANUAL .EXE BUILD INSTRUCTIONS
+========================================
+
+STEP 1: DELETE OLD BUILD FILES
+========================================
+
+Open Command Prompt (CMD) and run:
+
+cd "d:\SAURABH\spring 2024\git-workspace\gemini-hackathon-2026\DeskApp"
+
+rmdir /s /q dist
+rmdir /s /q .next
+rmdir /s /q out
+
+(If folders don't exist, that's fine)
+
+
+STEP 2: BUILD NEXT.JS FRONTEND
+========================================
+
+In CMD, run:
+
+npm run build
+
+Wait for it to finish. You should see:
+✓ Compiled successfully
+✓ Generating static pages
+Routes created with no errors
+
+
+STEP 3: BUILD THE ELECTRON .EXE
+========================================
+
+In CMD, run this EXACT command:
+
+set CSC_IDENTITY_AUTO_DISCOVERY=false && npx electron-builder --win --publish never
+
+This will take 2-5 minutes. Watch for:
+- "packaging platform=win32"
+- "dist/win-unpacked" - this is the folder being created
+- At the end you should see success messages
+
+
+STEP 4: FIND YOUR .EXE FILES
+========================================
+
+After build completes, check:
+
+dir dist\win-unpacked\LifeOS.exe
+
+This checks if LifeOS.exe was created (it should be ~200+ MB)
+
+
+STEP 5: TEST THE .EXE
+========================================
+
+In CMD, run:
+
+"d:\SAURABH\spring 2024\git-workspace\gemini-hackathon-2026\DeskApp\dist\win-unpacked\LifeOS.exe"
+
+Or just navigate to:
+d:\SAURABH\spring 2024\git-workspace\gemini-hackathon-2026\DeskApp\dist\win-unpacked\
+
+And double-click LifeOS.exe
+
+
+STEP 6: COPY TO DIST ROOT (FOR EASY SHARING)
+========================================
+
+If everything works, copy the final .exe:
+
+copy "d:\SAURABH\spring 2024\git-workspace\gemini-hackathon-2026\DeskApp\dist\win-unpacked\LifeOS.exe" "d:\SAURABH\spring 2024\git-workspace\gemini-hackathon-2026\DeskApp\dist\Mnemos.exe"
+
+Then verify:
+
+dir "d:\SAURABH\spring 2024\git-workspace\gemini-hackathon-2026\DeskApp\dist\Mnemos.exe"
+
+========================================
+TROUBLESHOOTING DURING BUILD
+========================================
+
+If you see errors during Step 2 (npm run build):
+- Error about TypeScript: This is normal - we fixed these already
+- Keep going - if it says "Compiled successfully" at the end, you're good
+
+If you see errors during Step 3 (electron-builder):
+- Errors about "Cannot create symbolic link" for darwin files: SAFE TO IGNORE
+- Errors about "winCodeSign": These are expected (trying to code-sign)
+- What matters: "dist/win-unpacked" folder gets created with LifeOS.exe
+
+If LifeOS.exe exists but won't open:
+- Check: Is backend running? (https://lifeos-backend-1056690364460.us-central1.run.app)
+- Try: Running as Administrator
+- Try: Right-click → Open with → Default app
+
+========================================
+EXPECTED OUTPUT PATTERNS
+========================================
+
+GOOD - You should see:
+✓ Compiled successfully
+✓ Generating static pages
+● electron-builder version=26.4.0
+● packaging
+● updating asar
+
+BAD - You should NOT see:
+Failed to compile
+Build error
+Cannot find
+
+========================================
+GO AHEAD AND RUN THESE COMMANDS!
+========================================
+
+Start with Step 1 and let me know:
+1. If you hit any errors, paste the full error message
+2. When LifeOS.exe is created, tell me
+3. If it opens when you double-click it
+
+Then I can help if anything goes wrong!
+

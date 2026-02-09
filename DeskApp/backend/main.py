@@ -350,9 +350,9 @@ async def ws_transcribe(websocket: WebSocket, token: str = Query(default="")):
     await websocket.accept()
     
     from google import genai
-    
+
     client = genai.Client(api_key=settings.GOOGLE_API_KEY)
-    MODEL = "gemini-2.5-flash-native-audio-preview-12-2025"
+    MODEL = settings.AUDIO_MODEL
     CONFIG = {
         "response_modalities": ["TEXT"],
         "system_instruction": (
@@ -3088,7 +3088,7 @@ Tags: {', '.join(memory_data.get('tags', []))}"""
         # Generate answer using Gemini
         import google.generativeai as genai
         genai.configure(api_key=settings.GOOGLE_API_KEY)
-        model = genai.GenerativeModel('gemini-2.5-flash')
+        model = genai.GenerativeModel(settings.PRIMARY_MODEL)
         
         prompt = f"""You are an intelligent assistant helping users find information about their captured items.
 

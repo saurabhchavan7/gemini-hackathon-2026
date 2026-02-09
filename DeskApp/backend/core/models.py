@@ -2,30 +2,31 @@
 Gemini 3 Model Configuration for Hackathon Compliance
 All agents use Gemini 3 API models
 """
+from . import models_config
 
 class GeminiModels:
-    """Centralized Gemini 3 model configuration"""
-    
+    """Centralized Gemini 3 model configuration (from models_config.py)"""
+
     # PRIMARY MODEL - Gemini 3 Flash Preview (required for hackathon)
-    PRIMARY_MODEL = "gemini-2.5-flash"
-    
+    PRIMARY_MODEL = models_config.GEMINI_PRIMARY_MODEL
+
     # ALTERNATIVE - Gemini 3 Pro Preview (higher quality, slower)
-    PRO_MODEL = "gemini-3-pro-preview"
-    
+    PRO_MODEL = models_config.GEMINI_PRO_MODEL
+
     # For vision/OCR tasks
-    VISION_MODEL = "gemini-2.5-flash"
-    
-    # For audio transcription (use Gemini 3 if available, fallback to 2.5)
-    AUDIO_MODEL = "gemini-2.5-flash"
-    
+    VISION_MODEL = models_config.GEMINI_VISION_MODEL
+
+    # For audio transcription (Gemini 3 supports audio)
+    AUDIO_MODEL = models_config.GEMINI_AUDIO_MODEL
+
     # For embeddings (latest)
-    EMBEDDING_MODEL = "text-embedding-004"
-    
+    EMBEDDING_MODEL = models_config.GEMINI_EMBEDDING_MODEL
+
     @classmethod
     def get_model(cls, task_type: str = "default") -> str:
         """
         Get appropriate Gemini 3 model for task
-        
+
         Args:
             task_type: "default", "vision", "audio", "pro", "embedding"
         """
@@ -37,7 +38,7 @@ class GeminiModels:
             "embedding": cls.EMBEDDING_MODEL
         }
         return task_map.get(task_type, cls.PRIMARY_MODEL)
-    
+
     @classmethod
     def get_display_name(cls) -> str:
         """Return model name for display/logging"""

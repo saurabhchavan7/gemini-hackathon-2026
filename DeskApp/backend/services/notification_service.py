@@ -12,8 +12,7 @@ class NotificationService:
     def __init__(self):
         self.db = FirestoreService()
         genai.configure(api_key=settings.GOOGLE_API_KEY)
-        # Use gemini-2.0-flash-exp instead
-        self.model = genai.GenerativeModel('gemini-2.0-flash-exp')
+        self.model = genai.GenerativeModel(settings.PRIMARY_MODEL)
         print("[NOTIFICATION_SERVICE] Initialized")
     
     def get_proactive_notifications(self, user_id: str) -> List[Dict]:

@@ -107,7 +107,7 @@ export default function CollectionsPage() {
           <div className="flex items-center gap-3">
             {(() => {
               const Icon = iconMap[selectedCollection.icon] || FolderOpen;
-              return <Icon className="h-5 w-5" style={{ color: 'var(--color-accent-blue)' }} />;
+              return <Icon className="h-5 w-5 text-blue-500" />;
             })()}
             <h1 className="text-xl font-semibold text-foreground">{selectedCollection.name}</h1>
             <Badge variant="secondary">{collectionCaptures.length} items</Badge>
@@ -218,19 +218,18 @@ export default function CollectionsPage() {
                       backgroundColor: scheme.bg
                     }}
                   >
-                    <Icon className="h-6 w-6" style={{ color: scheme.icon }} />
+                    <Icon className="h-6 w-6" />
                   </div>
                   <ChevronRight
-                    className="h-5 w-5 opacity-0 transition-opacity group-hover:opacity-100"
-                    style={{ color: 'var(--color-text-muted)' }}
+                    className="h-5 w-5 opacity-0 transition-opacity group-hover:opacity-100 text-muted-foreground"
                   />
                 </div>
 
-                <h3 className="mt-4 text-base font-semibold" style={{ color: 'var(--color-text-primary)' }}>
+                <h3 className="mt-4 text-base font-semibold text-foreground">
                   {collection.name}
                 </h3>
 
-                <p className="mt-2 text-sm line-clamp-2" style={{ color: 'var(--color-text-secondary)' }}>
+                <p className="mt-2 text-sm line-clamp-2 text-muted-foreground">
                   {collection.description}
                 </p>
 

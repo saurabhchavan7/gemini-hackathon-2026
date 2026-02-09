@@ -8,6 +8,7 @@ import re
 import pytz
 from typing import List, Dict, Any
 from agents.base import AgentBase
+from core.config import settings
 from .tools import (
     # Existing tools
     create_calendar_event, 
@@ -47,7 +48,7 @@ class PlanningAgent(AgentBase):
             "Execute each action with the appropriate tool.\n"
         )
         super().__init__(
-            model_id="gemini-2.5-flash", 
+            model_id=settings.ORCHESTRATOR_MODEL,
             system_instruction=system_instruction,
             tools=[create_calendar_event, add_to_shopping_list, create_task, create_note]
         )

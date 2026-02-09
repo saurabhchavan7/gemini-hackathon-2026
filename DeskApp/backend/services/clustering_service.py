@@ -11,7 +11,7 @@ class ClusteringService:
     
     def __init__(self):
         genai.configure(api_key=settings.GOOGLE_API_KEY)
-        self.model = genai.GenerativeModel('gemini-2.0-flash-exp')
+        self.model = genai.GenerativeModel(settings.PRIMARY_MODEL)
         print("[CLUSTERING_SERVICE] Initialized")
     
     def generate_clusters(

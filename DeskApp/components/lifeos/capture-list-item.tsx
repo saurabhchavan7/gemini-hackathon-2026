@@ -48,13 +48,11 @@ export function CaptureListItem({ item, isSelected, onClick }: CaptureListItemPr
   style={{
     backgroundColor: 'var(--color-bg-card)',
     boxShadow: '0 1px 2px rgba(0,0,0,0.05)',
-    borderLeftColor: item.urgency === 'high' || item.urgency === 'critical'
-      ? 'var(--color-accent-red)'
-      : item.urgency === 'medium'
-        ? 'var(--color-accent-orange)'
-        : item.intent === 'research' || item.intent === 'learn'
-          ? 'var(--color-accent-blue)'
-          : 'var(--color-accent-green)'
+    borderLeftColor: item.urgency === 'medium'
+      ? 'var(--color-accent-orange)'
+      : item.intent === 'research' || item.intent === 'learn'
+        ? 'var(--color-accent-blue)'
+        : 'var(--color-accent-green)'
   }}
       onMouseEnter={(e) => {
         e.currentTarget.style.boxShadow = '0 4px 12px rgba(0,0,0,0.1)';
@@ -168,16 +166,12 @@ export function CaptureListItem({ item, isSelected, onClick }: CaptureListItemPr
           <Badge
             className="text-xs gap-1 border-0 px-2 py-0.5"
             style={{
-              backgroundColor: item.urgency === 'high' || item.urgency === 'critical'
-                ? 'var(--color-accent-red-light)'
-                : item.urgency === 'medium'
-                  ? 'var(--color-accent-orange-light)'
-                  : 'var(--color-accent-green-light)',
-              color: item.urgency === 'high' || item.urgency === 'critical'
-                ? 'var(--color-accent-red)'
-                : item.urgency === 'medium'
-                  ? 'var(--color-accent-orange)'
-                  : 'var(--color-accent-green)'
+              backgroundColor: item.urgency === 'medium'
+                ? 'var(--color-accent-orange-light)'
+                : 'var(--color-accent-green-light)',
+              color: item.urgency === 'medium'
+                ? 'var(--color-accent-orange)'
+                : 'var(--color-accent-green)'
             }}
           >
             <AlertCircle className="h-2.5 w-2.5" />

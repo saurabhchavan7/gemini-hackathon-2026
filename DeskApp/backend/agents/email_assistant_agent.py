@@ -8,6 +8,7 @@ from datetime import datetime
 from pydantic import BaseModel, Field
 from services.gmail_service import GmailService
 from services.firestore_service import FirestoreService
+from core.config import settings
 
 class EmailAnalysis(BaseModel):
     """AI's analysis of whether email needs reply"""
@@ -61,7 +62,7 @@ class EmailAssistantAgent(AgentBase):
             "Saurabh\n"
         )
         super().__init__(
-            model_id="gemini-2.5-flash",
+            model_id=settings.PRIMARY_MODEL,
             system_instruction=system_instruction
         )
     
@@ -94,7 +95,7 @@ class EmailAssistantAgent(AgentBase):
             client = genai.Client(api_key=settings.GOOGLE_API_KEY)
             
             response = client.models.generate_content(
-                model="gemini-2.5-flash",
+                model=settings.PRIMARY_MODEL,
                 contents=prompt,
                 config=types.GenerateContentConfig(
                     system_instruction=self.system_instruction,
@@ -173,7 +174,7 @@ class EmailAssistantAgent(AgentBase):
             client = genai.Client(api_key=settings.GOOGLE_API_KEY)
             
             response = client.models.generate_content(
-                model="gemini-2.5-flash",
+                model=settings.PRIMARY_MODEL,
                 contents=prompt,
                 config=types.GenerateContentConfig(
                     system_instruction=self.system_instruction,

@@ -1,6 +1,6 @@
 
 # ============================================
-# FILE 2: graph_agent.py  
+# FILE 2: graph_agent.py
 # ============================================
 """
 LifeOS - Agent 6: Knowledge Graph Agent
@@ -9,6 +9,7 @@ Role: Discovers relationships between memories
 from agents.base import AgentBase
 from typing import List, Dict, Optional
 from datetime import datetime
+from core.config import settings
 
 class GraphAgent(AgentBase):
     def __init__(self):
@@ -29,7 +30,7 @@ class GraphAgent(AgentBase):
             "Only suggest connections with confidence > 0.6"
         )
         super().__init__(
-            model_id="gemini-2.5-flash",
+            model_id=settings.PRIMARY_MODEL,
             system_instruction=system_instruction
         )
 

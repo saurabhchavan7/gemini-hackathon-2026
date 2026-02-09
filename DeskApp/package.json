@@ -17,6 +17,7 @@
   "files": [
     "electron.js",
     "preload.js",
+    "src/**/*",
     "public/**/*",
     ".next/**/*",
     "package.json"
@@ -30,8 +31,8 @@
   "directories": {
     "buildResources": "public"
   },
-  "win": {
-    "target": "nsis",
+ "win": {
+    "target": "portable",
      "icon": "public/logo.ico"
   },
   "mac": {

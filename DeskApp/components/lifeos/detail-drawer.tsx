@@ -286,7 +286,7 @@ export function DetailDrawer({ item, isOpen, onClose, onUpdate }: DetailDrawerPr
 
   const research = captureDetails?.research;
   const hasResearch = captureDetails?.research?.has_data === true &&
-    (captureDetails.research.results || captureDetails?.research?.sources_count > 0);
+    (captureDetails?.research?.results || (captureDetails?.research?.sources_count ?? 0) > 0);
   const resources = captureDetails?.resources;
   const hasResources = resources?.triggered && resources?.needs_resources && resources?.resources && resources.resources.length > 0;
 
@@ -416,16 +416,16 @@ export function DetailDrawer({ item, isOpen, onClose, onUpdate }: DetailDrawerPr
                   </p>
 
                   {/* Additional metadata row */}
-                  {captureDetails?.classification?.total_actions > 0 && (
+                  {(captureDetails?.classification?.total_actions ?? 0) > 0 && (
                     <div className="flex items-center gap-3 mb-4 text-xs" style={{ color: 'var(--color-text-secondary)' }}>
                       <span className="flex items-center gap-1">
                         <CheckSquare className="h-3 w-3" />
-                        {captureDetails?.classification.total_actions} action{captureDetails?.classification.total_actions !== 1 ? 's' : ''} identified
+                        {captureDetails?.classification?.total_actions} action{(captureDetails?.classification?.total_actions ?? 0) !== 1 ? 's' : ''} identified
                       </span>
                       {captureDetails?.classification?.context_type && (
                         <>
                           <span>•</span>
-                          <span>{captureDetails.classification.context_type.replace(/_/g, ' ')}</span>
+                          <span>{captureDetails?.classification?.context_type.replace(/_/g, ' ')}</span>
                         </>
                       )}
                     </div>
@@ -441,22 +441,22 @@ export function DetailDrawer({ item, isOpen, onClose, onUpdate }: DetailDrawerPr
 
 
 
-                {captureDetails?.execution?.actions_executed && captureDetails.execution.actions_executed.length > 0 && (
+                {captureDetails?.execution?.actions_executed && (captureDetails?.execution?.actions_executed ?? []).length > 0 && (
                   <ExecutionResults
-                    actions={captureDetails.execution.actions_executed}
-                    successCount={captureDetails.execution.successful ?? 0}
-                    failedCount={captureDetails.execution.failed ?? 0}
-                    skippedCount={captureDetails.execution.skipped ?? 0}
+                    actions={captureDetails?.execution?.actions_executed ?? []}
+                    successCount={captureDetails?.execution?.successful ?? 0}
+                    failedCount={captureDetails?.execution?.failed ?? 0}
+                    skippedCount={captureDetails?.execution?.skipped ?? 0}
                   />
                 )}
 
                 {/* Research Results */}
-                {captureDetails?.research?.has_data && captureDetails?.research.sources_count > 0 && (
+                {captureDetails?.research?.has_data && (captureDetails?.research?.sources_count ?? 0) > 0 && (
                   <CollapsibleSection
                     title="Research Insights"
-                    subtitle={`${captureDetails.research.sources_count} sources via grounded search`}
+                    subtitle={`${captureDetails?.research?.sources_count ?? 0} sources via grounded search`}
                     icon={Search}
-                    badge={captureDetails.research.sources_count}
+                    badge={captureDetails?.research?.sources_count}
                     defaultOpen={true}
                   >
                     <div className="space-y-3">
@@ -471,12 +471,12 @@ export function DetailDrawer({ item, isOpen, onClose, onUpdate }: DetailDrawerPr
                           Grounded with Google Search
                         </span>
                         <span className="text-xs" style={{ color: 'var(--color-text-secondary)' }}>
-                          • {captureDetails.research.sources_count} authoritative sources
+                          • {captureDetails?.research?.sources_count ?? 0} authoritative sources
                         </span>
                       </div>
 
                       {/* Research Results - Markdown formatted */}
-                      {captureDetails.research.results && (
+                      {captureDetails?.research?.results && (
                         <div className="rounded-lg border p-4" style={{
                           backgroundColor: 'var(--color-bg-card)',
                           borderColor: 'var(--color-border-light)'
@@ -489,17 +489,17 @@ export function DetailDrawer({ item, isOpen, onClose, onUpdate }: DetailDrawerPr
                 )}
 
                 {/* Learning Resources */}
-                {captureDetails?.resources?.has_data && captureDetails.resources.resources_count > 0 && (
+                {captureDetails?.resources?.has_data && (captureDetails?.resources?.resources_count ?? 0) > 0 && (
                   <CollapsibleSection
                     title="Learning Resources"
-                    subtitle={captureDetails.resources.ai_reasoning || "Curated by AI"}
+                    subtitle={captureDetails?.resources?.ai_reasoning || "Curated by AI"}
                     icon={BookOpen}
-                    badge={captureDetails.resources.resources_count}
+                    badge={captureDetails?.resources?.resources_count}
                     defaultOpen={false}
                   >
                     <div className="space-y-4">
                       {/* Learning Path */}
-                      {captureDetails.resources.learning_path && (
+                      {captureDetails?.resources?.learning_path && (
                         <div className="rounded-lg border p-4" style={{
                           backgroundColor: 'var(--color-bg-card)',
                           borderColor: 'var(--color-border-light)'
@@ -511,15 +511,15 @@ export function DetailDrawer({ item, isOpen, onClose, onUpdate }: DetailDrawerPr
                             </span>
                           </div>
                           <p className="text-xs leading-relaxed" style={{ color: 'var(--color-text-secondary)' }}>
-                            {captureDetails.resources.learning_path}
+                            {captureDetails?.resources?.learning_path}
                           </p>
                         </div>
                       )}
 
                       {/* Resources List */}
-                      {captureDetails.resources.resources && captureDetails.resources.resources.length > 0 && (
+                      {captureDetails?.resources?.resources && (captureDetails?.resources?.resources ?? []).length > 0 && (
                         <div className="space-y-3">
-                          {captureDetails.resources.resources.map((resource, idx) => (
+                          {(captureDetails?.resources?.resources ?? []).map((resource, idx) => (
                             <a
                               key={idx}
                               href={resource.url}

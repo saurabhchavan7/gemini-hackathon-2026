@@ -22,9 +22,9 @@ class EmbeddingService:
         self.index_client = aiplatform_v1.IndexServiceClient(
             client_options={"api_endpoint": f"{self.region}-aiplatform.googleapis.com"}
         )
-        
-        self.embedding_model = TextEmbeddingModel.from_pretrained("text-embedding-004")
-        
+
+        self.embedding_model = TextEmbeddingModel.from_pretrained(settings.EMBEDDING_MODEL)
+
         print(f"[EMBEDDING_SERVICE] Initialized - Using v1 client")
 
     def get_embeddings(self, texts: List[str]) -> List[List[float]]:

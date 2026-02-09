@@ -1,12 +1,10 @@
-# ============================================
-# FILE 1: synthesis_agent.py
-# ============================================
 """
 LifeOS - Agent 5: Synthesis Agent
 Role: Combines multiple captures into comprehensive briefs
 """
 from agents.base import AgentBase
 from typing import List, Dict
+from core.config import settings
 
 class SynthesisAgent(AgentBase):
     def __init__(self):
@@ -21,7 +19,7 @@ class SynthesisAgent(AgentBase):
             "5. Suggest next steps"
         )
         super().__init__(
-            model_id="gemini-2.5-flash",
+            model_id=settings.PRIMARY_MODEL,
             system_instruction=system_instruction
         )
 

@@ -23,7 +23,7 @@ class RAGService:
         try:
             import google.generativeai as genai
             genai.configure(api_key=settings.GOOGLE_API_KEY)
-            model = genai.GenerativeModel('gemini-2.5-flash')
+            model = genai.GenerativeModel(settings.PRIMARY_MODEL)
             prompt =  f"""
                 You're an AI assistant who can understand user intent. The user can ask questions
                 about what they have captured in the LifeOS application, such as information related to:
@@ -195,9 +195,9 @@ Answer:"""
             
             import google.generativeai as genai
             import time
-            
+
             genai.configure(api_key=settings.GOOGLE_API_KEY)
-            model = genai.GenerativeModel('gemini-2.5-flash')
+            model = genai.GenerativeModel(settings.PRIMARY_MODEL)
             
             # Retry logic for rate limits
             max_retries = 2

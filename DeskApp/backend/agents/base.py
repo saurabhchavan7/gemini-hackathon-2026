@@ -17,9 +17,9 @@ class AgentBase(ABC):
     def __init__(self, model_id: str, system_instruction: str, tools: Optional[List[Callable]] = None):
         """
         Initializes the agent with a specific model and behavior guide.
-        
+
         Args:
-            model_id: The ID of the Gemini model (e.g., 'gemini-2.5-flash')
+            model_id: The ID of the Gemini model (e.g., 'gemini-3-flash-preview')
             system_instruction: The personality and rules for this agent
             tools: Optional list of Python functions that Gemini can call
         """
