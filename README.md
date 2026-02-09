@@ -1,6 +1,6 @@
 # Mnemos - Memory Meets Intelligence
 
-**Hackathon Date:** 8 February 2026  
+**Hackathon Date:** 9 February 2026  
 **Team Mnemos:** Sapna Chavan · Saurabh Chavan · Rohit Kosamkar
 
 ## Problem Statement
