@@ -19,7 +19,7 @@ class AgentBase(ABC):
         Initializes the agent with a specific model and behavior guide.
 
         Args:
-            model_id: The ID of the Gemini model (e.g., 'gemini-3-flash-preview')
+            model_id: The ID of the Gemini model (e.g., 'gemini-2.5-flash')
             system_instruction: The personality and rules for this agent
             tools: Optional list of Python functions that Gemini can call
         """

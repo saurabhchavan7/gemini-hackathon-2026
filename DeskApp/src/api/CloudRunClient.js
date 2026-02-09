@@ -19,7 +19,8 @@ const axios = require('axios');
 const TokenManager = require('../auth/TokenManager');
 
 // Backend URL - reads from environment variable
-const BASE_URL = process.env.BACKEND_URL || 'http://127.0.0.1:8000';
+const BASE_URL = process.env.BACKEND_URL || 'https://lifeos-backend-1056690364460.us-central1.run.app';
+
 
 console.log('🌐 [CloudRunClient] Using backend:', BASE_URL);
 /**

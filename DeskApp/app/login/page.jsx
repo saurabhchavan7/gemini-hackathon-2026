@@ -94,7 +94,7 @@ export default function Login() {
 
         {/* Header */}
         <div className="text-center mb-8">
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">LifeOS</h1>
+          <h1 className="text-3xl font-bold text-gray-900 mb-2">Mnemos</h1>
           <p className="text-gray-600">Your AI-powered cognitive assistant</p>
         </div>
 
@@ -166,7 +166,7 @@ export default function Login() {
         {process.env.NODE_ENV === 'development' && (
           <div className="mt-6 p-3 bg-gray-100 rounded text-xs text-gray-600">
             <p>🔧 Development Mode</p>
-            <p className="mt-1">Backend: {process.env.NEXT_PUBLIC_BACKEND_URL || 'http://127.0.0.1:8000'}</p>
+            <p className="mt-1">Backend: {process.env.NEXT_PUBLIC_BACKEND_URL || 'https://lifeos-backend-1056690364460.us-central1.run.app'}</p>
           </div>
         )}
       </div>
