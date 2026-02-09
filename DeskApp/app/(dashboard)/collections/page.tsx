@@ -67,7 +67,7 @@ export default function CollectionsPage() {
     const draggedItem = newItems[draggedIndex];
     newItems.splice(draggedIndex, 1);
     newItems.splice(index, 0, draggedItem);
-    
+
     // Update local state for visual feedback
     setDraggedIndex(index);
   };
@@ -107,7 +107,7 @@ export default function CollectionsPage() {
           <div className="flex items-center gap-3">
             {(() => {
               const Icon = iconMap[selectedCollection.icon] || FolderOpen;
-              return <Icon className="h-5 w-5 text-accent" />;
+              return <Icon className="h-5 w-5" style={{ color: 'var(--color-accent-blue)' }} />;
             })()}
             <h1 className="text-xl font-semibold text-foreground">{selectedCollection.name}</h1>
             <Badge variant="secondary">{collectionCaptures.length} items</Badge>
@@ -119,8 +119,7 @@ export default function CollectionsPage() {
         <div className="flex-1 overflow-auto p-6">
           {collectionCaptures.length === 0 ? (
             <div className="flex h-64 flex-col items-center justify-center text-center">
-              <FolderOpen className="h-12 w-12 text-muted-foreground/50" />
-              <h3 className="mt-4 text-lg font-medium text-foreground">No items</h3>
+              <FolderOpen className="h-5 w-5" style={{ color: 'var(--color-accent-blue)' }} />              <h3 className="mt-4 text-lg font-medium text-foreground">No items</h3>
               <p className="mt-1 text-sm text-muted-foreground">
                 This collection is empty
               </p>
@@ -137,9 +136,8 @@ export default function CollectionsPage() {
                   onDragStart={() => handleDragStart(index)}
                   onDragOver={(e) => handleDragOver(e, index)}
                   onDragEnd={handleDragEnd}
-                  className={`flex items-center gap-2 ${
-                    draggedIndex === index ? "opacity-50" : ""
-                  }`}
+                  className={`flex items-center gap-2 ${draggedIndex === index ? "opacity-50" : ""
+                    }`}
                 >
                   <div className="cursor-grab text-muted-foreground hover:text-foreground">
                     <GripVertical className="h-4 w-4" />
@@ -168,7 +166,10 @@ export default function CollectionsPage() {
         <div className="flex items-center gap-3">
           <FolderOpen className="h-5 w-5 text-muted-foreground" />
           <h1 className="text-xl font-semibold text-foreground">Collections</h1>
-          <span className="rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground">
+          <span className="rounded-full px-2 py-0.5 text-xs" style={{
+            backgroundColor: 'var(--color-bg-tertiary)',
+            color: 'var(--color-text-secondary)'
+          }}>
             {collections.length} collections
           </span>
         </div>
@@ -181,33 +182,68 @@ export default function CollectionsPage() {
             const Icon = iconMap[collection.icon] || FolderOpen;
             const itemCount = getCollectionCaptures(collection).length;
 
+            // Color scheme per collection type
+            const colorSchemes: Record<string, { bg: string, icon: string }> = {
+              'Briefcase': { bg: '#e3f2fd', icon: '#1976d2' },      // Blue for Work
+              'GraduationCap': { bg: '#e8f5e9', icon: '#388e3c' },  // Green for Learning
+              'AlertTriangle': { bg: '#fff3e0', icon: '#f57c00' },  // Orange
+              'ShoppingCart': { bg: '#f3e5f5', icon: '#7b1fa2' },   // Purple
+              'FolderOpen': { bg: '#e8f0fe', icon: '#1a73e8' },     // Blue default
+            };
+
+            const scheme = colorSchemes[collection.icon] || colorSchemes['FolderOpen'];
+
             return (
               <Card
                 key={collection.id}
-                className="group cursor-pointer bg-card p-5 transition-all hover:bg-card/80 hover:border-accent/50"
+                className="group cursor-pointer p-6 transition-all rounded-2xl border-0"
+                style={{
+                  backgroundColor: 'var(--color-bg-card)',
+                  boxShadow: '0 1px 3px rgba(0,0,0,0.1)'
+                }}
                 onClick={() => setSelectedCollection(collection)}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.boxShadow = '0 8px 16px rgba(0,0,0,0.12)';
+                  e.currentTarget.style.transform = 'translateY(-4px)';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.boxShadow = '0 1px 3px rgba(0,0,0,0.1)';
+                  e.currentTarget.style.transform = 'translateY(0)';
+                }}
               >
                 <div className="flex items-start justify-between">
-                  <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-accent/10">
-                    <Icon className="h-5 w-5 text-accent" />
+                  <div
+                    className="flex h-12 w-12 items-center justify-center rounded-xl"
+                    style={{
+                      backgroundColor: scheme.bg
+                    }}
+                  >
+                    <Icon className="h-6 w-6" style={{ color: scheme.icon }} />
                   </div>
-                  <ChevronRight className="h-4 w-4 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100" />
+                  <ChevronRight
+                    className="h-5 w-5 opacity-0 transition-opacity group-hover:opacity-100"
+                    style={{ color: 'var(--color-text-muted)' }}
+                  />
                 </div>
-                <h3 className="mt-4 text-base font-medium text-card-foreground">
+
+                <h3 className="mt-4 text-base font-semibold" style={{ color: 'var(--color-text-primary)' }}>
                   {collection.name}
                 </h3>
-                <p className="mt-1 text-sm text-muted-foreground line-clamp-2">
+
+                <p className="mt-2 text-sm line-clamp-2" style={{ color: 'var(--color-text-secondary)' }}>
                   {collection.description}
                 </p>
-                <div className="mt-4 flex items-center justify-between">
-                  <Badge variant="secondary" className="text-xs">
+
+                <div className="mt-4">
+                  <span
+                    className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium"
+                    style={{
+                      backgroundColor: 'var(--color-bg-tertiary)',
+                      color: 'var(--color-text-secondary)'
+                    }}
+                  >
                     {itemCount} {itemCount === 1 ? "item" : "items"}
-                  </Badge>
-                  {collection.filter.intents && (
-                    <span className="text-xs text-muted-foreground">
-                      {collection.filter.intents.join(", ")}
-                    </span>
-                  )}
+                  </span>
                 </div>
               </Card>
             );

@@ -1,8 +1,8 @@
 import os
-from datetime import datetime  # ADDED: Missing import
+from datetime import datetime
 from google.cloud import firestore
 from core.config import settings
-from models.capture import Capture
+from models.capture import Capture, CaptureRecord
 from models.memory import Memory
 from models.action import Action
 from typing import Optional, List
@@ -10,6 +10,7 @@ from typing import Optional, List
 """
 LifeOS - Firestore Service (Expanded for 3-Layer Classification)
 Manages 12 domain-specific collections + Comprehensive Captures
+UNIFIED: All methods use capture_id (not id, source_capture_id, or capture_ref)
 """
 
 DOMAIN_COLLECTIONS = {
@@ -17,15 +18,15 @@ DOMAIN_COLLECTIONS = {
     "education_learning": "learning_items",
     "money_finance": "financial_items",
     "home_daily_life": "home_items",
-        "health_wellbeing": "health_items",
-        "family_relationships": "family_items",
-        "travel_movement": "travel_items",
-        "shopping_consumption": "shopping_lists",
-        "entertainment_leisure": "media_items",
-        "social_community": "social_items",
-        "admin_documents": "document_items",
-        "ideas_thoughts": "notes"
-    }
+    "health_wellbeing": "health_items",
+    "family_relationships": "family_items",
+    "travel_movement": "travel_items",
+    "shopping_consumption": "shopping_lists",
+    "entertainment_leisure": "media_items",
+    "social_community": "social_items",
+    "admin_documents": "document_items",
+    "ideas_thoughts": "notes"
+}
 
 class FirestoreService:
     def __init__(self):
@@ -43,60 +44,37 @@ class FirestoreService:
         """Helper to get the root document for a user"""
         return self.db.collection("users").document(user_id)
 
-    async def save_file_metadata(self, user_id: str, file_id: str, meta: dict) -> str:
-        """
-        Save document metadata (file_name, upload_date, title, summary, domain, etc.) in users/{user_id}/files/{file_id}.
-        Returns document id on success, None on failure.
-        """
-        try:
-            # Serialize any datetime objects
-            meta = self._serialize_datetimes(meta)
-            doc_ref = self._get_user_ref(user_id).collection('files').document(file_id)
-            doc_ref.set(meta)
-            print(f"[FIRESTORE] Saved file metadata: {doc_ref.id}")
-            return doc_ref.id
-        except Exception as e:
-            print(f"[ERROR] save_file_metadata failed: {e}")
-            return None
-    def __init__(self):
-        self.project_id = os.getenv("GCP_PROJECT_ID") or "gemini-hackathon-2026-484903"
-        
-        try:
-            self.db = firestore.Client(project=self.project_id)
-            print(f"[FIRESTORE] Initialized for project: {self.project_id}")
-        except Exception as e:
-            print(f"[ERROR] Firestore initialization failed: {e}")
-            raise e
-
-    def _get_user_ref(self, user_id: str):
-        """Helper to get the root document for a user"""
-        return self.db.collection("users").document(user_id)
-
     def _get_collection_for_domain(self, domain: str) -> str:
         """Returns the appropriate collection name for a domain"""
         return DOMAIN_COLLECTIONS.get(domain, "notes")
 
     # ============================================
-    # CORE METHODS (Existing)
+    # CORE METHODS - UNIFIED capture_id
     # ============================================
 
     async def save_capture(self, capture: Capture) -> bool:
-        """Saves a raw capture into the user's subcollection"""
+        """
+        Saves a raw capture into the user's subcollection
+        UNIFIED: Uses capture.capture_id (not capture.id)
+        """
         try:
-            doc_ref = self._get_user_ref(capture.user_id).collection(settings.COLLECTION_CAPTURES).document(capture.id)
+            doc_ref = self._get_user_ref(capture.user_id).collection(settings.COLLECTION_CAPTURES).document(capture.capture_id)
             doc_ref.set(capture.model_dump())
-            print(f"[FIRESTORE] Capture {capture.id} saved")
+            print(f"[FIRESTORE] Capture {capture.capture_id} saved")
             return True
         except Exception as e:
             print(f"[ERROR] save_capture failed: {e}")
             return False
 
     async def save_memory(self, memory: Memory) -> bool:
-        """Saves a processed memory with 3-layer classification"""
+        """
+        Saves a processed memory with 3-layer classification
+        UNIFIED: Uses memory.capture_id (not memory.id)
+        """
         try:
-            doc_ref = self._get_user_ref(memory.user_id).collection(settings.COLLECTION_MEMORIES).document(memory.id)
+            doc_ref = self._get_user_ref(memory.user_id).collection(settings.COLLECTION_MEMORIES).document(memory.capture_id)
             doc_ref.set(memory.model_dump())
-            print(f"[FIRESTORE] Memory {memory.id} archived (domain: {memory.domain})")
+            print(f"[FIRESTORE] Memory {memory.capture_id} archived (domain: {memory.domain})")
             return True
         except Exception as e:
             print(f"[ERROR] save_memory failed: {e}")
@@ -113,19 +91,20 @@ class FirestoreService:
             return False
 
     # ============================================
-    # COMPREHENSIVE CAPTURE METHODS (NEW)
+    # COMPREHENSIVE CAPTURE METHODS
     # ============================================
 
     async def save_comprehensive_capture(self, capture: 'CaptureRecord') -> bool:
         """
         Saves a comprehensive capture with full metadata
         Stored in users/{user_id}/comprehensive_captures/{capture_id}
+        UNIFIED: Uses capture.capture_id
         """
         try:
             doc_ref = (
                 self._get_user_ref(capture.user_id)
                 .collection("comprehensive_captures")
-                .document(capture.id)
+                .document(capture.capture_id)  #  Use capture_id
             )
             
             # Convert to dict with proper serialization
@@ -136,7 +115,7 @@ class FirestoreService:
             
             doc_ref.set(capture_dict)
             
-            print(f"[FIRESTORE] Comprehensive capture {capture.id} saved")
+            print(f"[FIRESTORE] Comprehensive capture {capture.capture_id} saved")
             print(f"[FIRESTORE] Status: {capture.status}")
             
             # Safe check for classification domain
@@ -155,12 +134,13 @@ class FirestoreService:
         """
         Updates an existing comprehensive capture
         Used by background agents to add their results
+        UNIFIED: Uses capture.capture_id
         """
         try:
             doc_ref = (
                 self._get_user_ref(capture.user_id)
                 .collection("comprehensive_captures")
-                .document(capture.id)
+                .document(capture.capture_id)  # ✅ Use capture_id
             )
             
             capture_dict = capture.model_dump()
@@ -168,12 +148,51 @@ class FirestoreService:
             
             doc_ref.set(capture_dict, merge=True)
             
-            print(f"[FIRESTORE] Comprehensive capture {capture.id} updated")
+            print(f"[FIRESTORE] Comprehensive capture {capture.capture_id} updated")
             
             return True
             
         except Exception as e:
             print(f"[ERROR] update_comprehensive_capture failed: {e}")
+            return False
+        
+    async def update_capture_fields(
+        self,
+        user_id: str,
+        capture_id: str,
+        field_updates: dict
+    ) -> bool:
+        """
+        Update specific fields in comprehensive_captures WITHOUT loading full document
+        
+        Args:
+            user_id: User ID
+            capture_id: Capture document ID
+            field_updates: Dict of field paths to update
+        
+        Returns:
+            bool: True if successful, False otherwise
+        """
+        try:
+            doc_ref = (
+                self._get_user_ref(user_id)
+                .collection("comprehensive_captures")
+                .document(capture_id)
+            )
+            
+            # Serialize any datetime objects in updates
+            serialized_updates = self._serialize_datetimes(field_updates)
+            
+            # Use Firestore's update method (not set!)
+            doc_ref.update(serialized_updates)
+            
+            print(f"[FIRESTORE] Updated capture {capture_id} fields: {list(field_updates.keys())}")
+            return True
+            
+        except Exception as e:
+            print(f"[ERROR] update_capture_fields failed for {capture_id}: {e}")
+            import traceback
+            traceback.print_exc()
             return False
 
     async def get_comprehensive_capture(self, user_id: str, capture_id: str) -> dict:
@@ -195,7 +214,7 @@ class FirestoreService:
                 return None
             
             capture_data = doc.to_dict()
-            capture_data['id'] = doc.id
+            capture_data['id'] = doc.id  # For backward compatibility
             
             print(f"[FIRESTORE] Retrieved comprehensive capture {capture_id}")
             print(f"[FIRESTORE] Status: {capture_data.get('status')}")
@@ -206,65 +225,13 @@ class FirestoreService:
             print(f"[ERROR] get_comprehensive_capture failed: {e}")
             return None
 
-    async def update_capture_agent_result(
-        self, 
-        user_id: str, 
-        capture_id: str, 
-        agent_name: str, 
-        result: dict
-    ) -> bool:
-        """
-        Updates a specific agent's result in the comprehensive capture
-        
-        Args:
-            user_id: User ID
-            capture_id: Capture ID
-            agent_name: Agent field name (e.g., 'research', 'proactive', 'resources')
-            result: Agent result dict
-        
-        Used by background agents to add their results without loading entire capture
-        """
-        try:
-            doc_ref = (
-                self._get_user_ref(user_id)
-                .collection("comprehensive_captures")
-                .document(capture_id)
-            )
-            
-            # Serialize datetimes in result
-            result = self._serialize_datetimes(result)
-            
-            # Update only the specific agent field
-            update_data = {
-                agent_name: result,
-                f"timeline.{agent_name}_completed": datetime.utcnow().isoformat(),
-                "updated_at": datetime.utcnow().isoformat()
-            }
-            
-            doc_ref.update(update_data)
-            
-            print(f"[FIRESTORE] Updated {agent_name} result for capture {capture_id}")
-            
-            return True
-            
-        except Exception as e:
-            print(f"[ERROR] update_capture_agent_result failed: {e}")
-            return False
-
     async def list_comprehensive_captures(
         self, 
         user_id: str, 
         limit: int = 20,
         status: str = None
     ) -> list:
-        """
-        List comprehensive captures for a user
-        
-        Args:
-            user_id: User ID
-            limit: Max number to return
-            status: Filter by status (processing, completed, failed, partial_failure)
-        """
+        """List comprehensive captures for a user"""
         try:
             query = (
                 self._get_user_ref(user_id)
@@ -280,7 +247,7 @@ class FirestoreService:
             captures = []
             for doc in docs:
                 capture_data = doc.to_dict()
-                capture_data['id'] = doc.id
+                capture_data['id'] = doc.id  # For backward compatibility
                 captures.append(capture_data)
             
             print(f"[FIRESTORE] Retrieved {len(captures)} comprehensive captures")
@@ -306,14 +273,11 @@ class FirestoreService:
             return obj
 
     # ============================================
-    # HELPER METHOD FOR STATISTICS
+    # STATISTICS
     # ============================================
 
     async def get_capture_statistics(self, user_id: str) -> dict:
-        """
-        Get statistics about user's comprehensive captures
-        Useful for dashboard
-        """
+        """Get statistics about user's comprehensive captures"""
         try:
             docs = (
                 self._get_user_ref(user_id)
@@ -369,7 +333,7 @@ class FirestoreService:
             }
 
     # ============================================
-    # MEMORY RETRIEVAL (Enhanced with domain filter)
+    # MEMORY & GRAPH RETRIEVAL
     # ============================================
 
     async def get_user_memories(self, user_id: str, limit: int = 20, domain: str = None) -> list:
@@ -385,7 +349,7 @@ class FirestoreService:
             memories = []
             for doc in docs:
                 memory_data = doc.to_dict()
-                memory_data['id'] = doc.id
+                memory_data['id'] = doc.id  # For backward compatibility
                 memories.append(memory_data)
             return memories
         except Exception as e:
@@ -406,16 +370,12 @@ class FirestoreService:
             memories = []
             for doc in docs:
                 memory_data = doc.to_dict()
-                memory_data['id'] = doc.id
+                memory_data['id'] = doc.id  # For backward compatibility
                 memories.append(memory_data)
             return memories
         except Exception as e:
             print(f"[ERROR] get_memories_by_intent failed: {e}")
             return []
-
-    # ============================================
-    # KNOWLEDGE GRAPH
-    # ============================================
 
     async def save_graph_edge(self, user_id: str, edge: dict) -> bool:
         """Saves a connection/edge in the knowledge graph"""
@@ -443,7 +403,7 @@ class FirestoreService:
             return []
 
     # ============================================
-    # EXISTING COLLECTION METHODS
+    # COLLECTION RETRIEVAL METHODS
     # ============================================
 
     async def get_google_calendar_events(self, user_id: str, limit: int = 20) -> list:
@@ -558,7 +518,7 @@ class FirestoreService:
             return False
 
     # ============================================
-    # NEW DOMAIN-SPECIFIC COLLECTION METHODS
+    # DOMAIN-SPECIFIC COLLECTION METHODS
     # ============================================
 
     async def get_financial_items(self, user_id: str, status: str = "pending", limit: int = 50) -> list:
@@ -705,7 +665,7 @@ class FirestoreService:
             return []
 
     # ============================================
-    # GENERIC DOMAIN COLLECTION ACCESS
+    # GENERIC DOMAIN ACCESS
     # ============================================
 
     async def get_items_by_domain(self, user_id: str, domain: str, limit: int = 50) -> list:
@@ -751,19 +711,11 @@ class FirestoreService:
             return None
 
     async def save_user_file(self, user_id: str, file_meta: dict) -> str:
-        """
-        Save uploaded file metadata for a user.
-
-        Stores metadata under users/{user_id}/files/{file_id}.
-        Expects file_meta to contain at least: name, gcs_path, size_bytes, file_type, uploaded_at (optional).
-        Returns the created document id on success, None on failure.
-        """
+        """Save uploaded file metadata for a user"""
         try:
-            # Ensure uploaded_at exists
             if 'uploaded_at' not in file_meta:
                 file_meta['uploaded_at'] = datetime.utcnow().isoformat()
 
-            # Serialize any datetime objects
             file_meta = self._serialize_datetimes(file_meta)
 
             doc_ref = self._get_user_ref(user_id).collection('files').document()
@@ -775,8 +727,20 @@ class FirestoreService:
             print(f"[ERROR] save_user_file failed: {e}")
             return None
 
+    async def save_file_metadata(self, user_id: str, file_id: str, meta: dict) -> str:
+        """Save document metadata"""
+        try:
+            meta = self._serialize_datetimes(meta)
+            doc_ref = self._get_user_ref(user_id).collection('files').document(file_id)
+            doc_ref.set(meta)
+            print(f"[FIRESTORE] Saved file metadata: {doc_ref.id}")
+            return doc_ref.id
+        except Exception as e:
+            print(f"[ERROR] save_file_metadata failed: {e}")
+            return None
+
     # ============================================
-    # STATISTICS & DASHBOARD
+    # DASHBOARD METHODS
     # ============================================
 
     async def get_domain_counts(self, user_id: str) -> dict:
@@ -785,8 +749,6 @@ class FirestoreService:
         
         for domain, collection in DOMAIN_COLLECTIONS.items():
             try:
-                # Note: This is inefficient for large collections
-                # Consider using Cloud Functions for aggregation in production
                 docs = self._get_user_ref(user_id).collection(collection).limit(100).stream()
                 counts[domain] = sum(1 for _ in docs)
             except:
@@ -819,3 +781,242 @@ class FirestoreService:
         # Sort by created_at and return top N
         all_items.sort(key=lambda x: x.get('created_at', ''), reverse=True)
         return all_items[:limit]
+
+    # ============================================
+    # V2 ENHANCED METHODS - Fetch Subcollections
+    # ============================================
+
+    async def get_research_results(self, user_id: str, doc_id: str) -> dict:
+        """
+        Fetch research results from research_results subcollection
+        
+        Args:
+            user_id: User ID
+            doc_id: Document ID from research.firestore_doc_id
+            
+        Returns:
+            Research results dict with sources, summary, etc.
+        """
+        try:
+            doc_ref = (
+                self._get_user_ref(user_id)
+                .collection("research_results")
+                .document(doc_id)
+            )
+            
+            doc = doc_ref.get()
+            
+            if not doc.exists:
+                print(f"[FIRESTORE] Research results {doc_id} not found")
+                return None
+            
+            data = doc.to_dict()
+            print(f"[FIRESTORE] Retrieved research results: {doc_id}")
+            return data
+            
+        except Exception as e:
+            print(f"[ERROR] get_research_results failed: {e}")
+            return None
+
+    async def get_resource_findings(self, user_id: str, doc_id: str) -> dict:
+        """
+        Fetch learning resources from resource_findings subcollection
+        
+        Args:
+            user_id: User ID
+            doc_id: Document ID from resources.firestore_doc_id
+            
+        Returns:
+            Resource findings dict with resources array, ai_reasoning, etc.
+        """
+        try:
+            doc_ref = (
+                self._get_user_ref(user_id)
+                .collection("resource_findings")
+                .document(doc_id)
+            )
+            
+            doc = doc_ref.get()
+            
+            if not doc.exists:
+                print(f"[FIRESTORE] Resource findings {doc_id} not found")
+                return None
+            
+            data = doc.to_dict()
+            print(f"[FIRESTORE] Retrieved resource findings: {doc_id}")
+            return data
+            
+        except Exception as e:
+            print(f"[ERROR] get_resource_findings failed: {e}")
+            return None
+        
+    async def get_enhanced_capture_data_v2(self, user_id: str, capture_id: str) -> Optional[dict]:
+        """
+        V2: Enhanced capture fetch using unified capture_id linkage
+        
+        Fetches:
+        1. Main comprehensive_captures document
+        2. research_results/{capture_id} (if exists)
+        3. task_resources/{capture_id} (if exists)
+        4. google_tasks WHERE capture_id == {id}
+        5. google_calendar_events WHERE capture_id == {id}
+        6. All other execution collections
+        
+        Returns complete merged data structure
+        """
+        try:
+            print(f"[FIRESTORE V2] Fetching enhanced capture: {capture_id}")
+            
+            # 1. Get main capture document
+            capture_ref = (
+                self._get_user_ref(user_id)
+                .collection("comprehensive_captures")
+                .document(capture_id)
+            )
+            
+            capture_doc = capture_ref.get()
+            
+            if not capture_doc.exists:
+                print(f"[FIRESTORE V2] Capture {capture_id} not found")
+                return None
+            
+            capture_data = capture_doc.to_dict()
+            capture_data['id'] = capture_id
+            
+            # 2. Fetch research_results/{capture_id}
+            if capture_data.get('research', {}).get('has_data'):
+                print(f"[FIRESTORE V2] Fetching research_results/{capture_id}")
+                research_doc = (
+                    self._get_user_ref(user_id)
+                    .collection("research_results")
+                    .document(capture_id)
+                    .get()
+                )
+                
+                if research_doc.exists:
+                    research_data = research_doc.to_dict()
+                    
+                    # Merge research data into capture
+                    if 'research' not in capture_data:
+                        capture_data['research'] = {}
+                    
+                    capture_data['research']['results'] = research_data.get('results', '')
+                    capture_data['research']['sources'] = []  # TODO: Parse sources from results
+                    capture_data['research']['sources_count'] = research_data.get('sources_count', 0)
+                    
+                    print(f"[FIRESTORE V2] ✓ Merged research data: {research_data.get('sources_count', 0)} sources")
+            
+            # 3. Fetch task_resources/{capture_id}
+            if capture_data.get('resources', {}).get('has_data'):
+                print(f"[FIRESTORE V2] Fetching task_resources/{capture_id}")
+                resources_doc = (
+                    self._get_user_ref(user_id)
+                    .collection("task_resources")
+                    .document(capture_id)
+                    .get()
+                )
+                
+                if resources_doc.exists:
+                    resources_data = resources_doc.to_dict()
+                    
+                    # Merge resources data
+                    if 'resources' not in capture_data:
+                        capture_data['resources'] = {}
+                    
+                    capture_data['resources']['resources'] = resources_data.get('resources', [])
+                    capture_data['resources']['summary'] = resources_data.get('summary', '')
+                    capture_data['resources']['learning_path'] = resources_data.get('learning_path', '')
+                    capture_data['resources']['ai_decision'] = resources_data.get('ai_decision', {})
+                    capture_data['resources']['resources_count'] = len(resources_data.get('resources', []))
+                    
+                    print(f"[FIRESTORE V2] ✓ Merged {capture_data['resources']['resources_count']} learning resources")
+            
+            # 4. Fetch google_tasks WHERE capture_id == {id}
+            print(f"[FIRESTORE V2] Fetching google_tasks for capture {capture_id}")
+            tasks_query = (
+                self._get_user_ref(user_id)
+                .collection("google_tasks")
+                .where("capture_id", "==", capture_id)
+            )
+            
+            tasks_docs = tasks_query.stream()
+            tasks_list = []
+            
+            for task_doc in tasks_docs:
+                task_data = task_doc.to_dict()
+                task_data['firestore_doc_id'] = task_doc.id
+                tasks_list.append(task_data)
+            
+            if tasks_list:
+                print(f"[FIRESTORE V2] ✓ Found {len(tasks_list)} tasks")
+            
+            # 5. Fetch google_calendar_events WHERE capture_id == {id}
+            print(f"[FIRESTORE V2] Fetching google_calendar_events for capture {capture_id}")
+            events_query = (
+                self._get_user_ref(user_id)
+                .collection("google_calendar_events")
+                .where("capture_id", "==", capture_id)
+            )
+            
+            events_docs = events_query.stream()
+            events_list = []
+            
+            for event_doc in events_docs:
+                event_data = event_doc.to_dict()
+                event_data['firestore_doc_id'] = event_doc.id
+                events_list.append(event_data)
+            
+            if events_list:
+                print(f"[FIRESTORE V2] ✓ Found {len(events_list)} calendar events")
+            
+            # 6. Merge execution results into capture_data
+            if not capture_data.get('execution'):
+                capture_data['execution'] = {}
+            
+            if not capture_data['execution'].get('actions_executed'):
+                capture_data['execution']['actions_executed'] = []
+            
+            # Add tasks to actions_executed
+            for task in tasks_list:
+                capture_data['execution']['actions_executed'].append({
+                    "type": "task",
+                    "title": task.get('title'),
+                    "notes": task.get('notes'),
+                    "due_date": task.get('due_date'),
+                    "google_task_id": task.get('google_task_id'),
+                    "firestore_doc_id": task.get('firestore_doc_id'),
+                    "status": task.get('status'),
+                    "created_at": task.get('created_at')
+                })
+            
+            # Add events to actions_executed
+            for event in events_list:
+                capture_data['execution']['actions_executed'].append({
+                    "type": "calendar_event",
+                    "title": event.get('title'),
+                    "start_time": event.get('start_time'),
+                    "end_time": event.get('end_time'),
+                    "location": event.get('location'),
+                    "attendees": event.get('attendees', []),
+                    "google_calendar_id": event.get('google_calendar_id'),
+                    "google_calendar_link": event.get('google_calendar_link'),
+                    "firestore_doc_id": event.get('firestore_doc_id'),
+                    "status": event.get('status'),
+                    "created_at": event.get('created_at')
+                })
+            
+            # Update execution counts
+            capture_data['execution']['total_actions'] = len(capture_data['execution']['actions_executed'])
+            capture_data['execution']['successful'] = len([a for a in capture_data['execution']['actions_executed'] if a.get('status') in ['active', 'synced']])
+            
+            print(f"[FIRESTORE V2] ✓ Enhanced capture complete: {capture_data['execution']['total_actions']} total actions")
+            
+            return capture_data
+            
+        except Exception as e:
+            print(f"[ERROR] get_enhanced_capture_data_v2 failed: {e}")
+            import traceback
+            traceback.print_exc()
+            return None
+
+

@@ -12,8 +12,22 @@ const { contextBridge, ipcRenderer } = require('electron');
 
 contextBridge.exposeInMainWorld('electronAPI', {
 
-   apiAskCapture: (captureId, question) => 
-    ipcRenderer.invoke('api-ask-capture', captureId, question),
+  apiGetCollections: () => ipcRenderer.invoke('api-get-collections'),
+
+  apiGetThemeClusters: (numClusters) => 
+  ipcRenderer.invoke('api-get-theme-clusters', numClusters),
+
+  apiAskQuestion: (question, filterDomain) => 
+  ipcRenderer.invoke('api-ask-question', question, filterDomain),
+
+  onProactiveNotificationData: (callback) =>
+  ipcRenderer.on('proactive-notification-data', (_, data) => callback(data)),
+ 
+  apiGetCaptureById: (captureId) => ipcRenderer.invoke('api-get-capture-by-id', captureId),
+  apiGetCaptureByIdV2: (captureId) => ipcRenderer.invoke('api-get-capture-v2', captureId),
+
+  apiAskCapture: (captureId, question) => 
+  ipcRenderer.invoke('api-ask-capture', captureId, question),
 
   // CAPTURE APIs
   getAuthToken: () => ipcRenderer.invoke('get-auth-token'),

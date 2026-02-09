@@ -48,7 +48,7 @@ export default function SynthesisPage() {
       {/* Header */}
       <div className="border-b border-border px-6 py-4">
         <div className="flex items-center gap-3">
-          <Sparkles className="h-5 w-5 text-muted-foreground" />
+          <Sparkles className="h-5 w-5" style={{ color: 'var(--color-accent-blue)' }} />
           <h1 className="text-xl font-semibold text-foreground">Synthesis</h1>
         </div>
         <p className="mt-1 text-sm text-muted-foreground">
@@ -59,30 +59,74 @@ export default function SynthesisPage() {
       {/* Content */}
       <Tabs defaultValue="clusters" className="flex-1 flex flex-col">
         <div className="border-b border-border px-6">
-          <TabsList className="h-12 bg-transparent p-0 gap-6">
+          <TabsList className="h-10 bg-transparent p-0 gap-2 inline-flex">
             <TabsTrigger
               value="clusters"
-              className="h-12 gap-2 rounded-none border-b-2 border-transparent px-0 data-[state=active]:border-accent data-[state=active]:bg-transparent data-[state=active]:shadow-none"
+              className="h-10 px-4 gap-2 rounded-full border-0 data-[state=active]:shadow-none font-medium text-sm"
+              style={{
+                backgroundColor: 'var(--color-accent-blue)',
+                color: '#ffffff'
+              }}
             >
               <Sparkles className="h-4 w-4" />
               Theme Clusters
-              <Badge variant="secondary" className="ml-1">
+              <span
+                className="ml-1 px-1.5 py-0.5 text-xs rounded-full font-medium"
+                style={{
+                  backgroundColor: 'rgba(255,255,255,0.2)',
+                  color: '#ffffff'
+                }}
+              >
                 {clusters.length}
-              </Badge>
+              </span>
             </TabsTrigger>
             <TabsTrigger
               value="connections"
-              className="h-12 gap-2 rounded-none border-b-2 border-transparent px-0 data-[state=active]:border-accent data-[state=active]:bg-transparent data-[state=active]:shadow-none"
+              className="h-10 px-4 gap-2 rounded-full border-0 data-[state=active]:shadow-none font-medium text-sm"
+              style={{
+                backgroundColor: 'transparent',
+                color: 'var(--color-text-secondary)'
+              }}
+              onMouseEnter={(e) => {
+                if (e.currentTarget.getAttribute('data-state') !== 'active') {
+                  e.currentTarget.style.backgroundColor = 'var(--color-bg-tertiary)';
+                }
+              }}
+              onMouseLeave={(e) => {
+                if (e.currentTarget.getAttribute('data-state') !== 'active') {
+                  e.currentTarget.style.backgroundColor = 'transparent';
+                }
+              }}
             >
               <Link2 className="h-4 w-4" />
               Connections
-              <Badge variant="secondary" className="ml-1">
+              <span
+                className="ml-1 px-1.5 py-0.5 text-xs rounded-full font-medium"
+                style={{
+                  backgroundColor: 'var(--color-bg-tertiary)',
+                  color: 'var(--color-text-secondary)'
+                }}
+              >
                 {connections.length}
-              </Badge>
+              </span>
             </TabsTrigger>
             <TabsTrigger
               value="map"
-              className="h-12 gap-2 rounded-none border-b-2 border-transparent px-0 data-[state=active]:border-accent data-[state=active]:bg-transparent data-[state=active]:shadow-none"
+              className="h-10 px-4 gap-2 rounded-full border-0 data-[state=active]:shadow-none font-medium text-sm"
+              style={{
+                backgroundColor: 'transparent',
+                color: 'var(--color-text-secondary)'
+              }}
+              onMouseEnter={(e) => {
+                if (e.currentTarget.getAttribute('data-state') !== 'active') {
+                  e.currentTarget.style.backgroundColor = 'var(--color-bg-tertiary)';
+                }
+              }}
+              onMouseLeave={(e) => {
+                if (e.currentTarget.getAttribute('data-state') !== 'active') {
+                  e.currentTarget.style.backgroundColor = 'transparent';
+                }
+              }}
             >
               <Network className="h-4 w-4" />
               Knowledge Map
@@ -94,40 +138,84 @@ export default function SynthesisPage() {
         <TabsContent value="clusters" className="flex-1 overflow-auto p-6 mt-0">
           <div className="grid gap-4 md:grid-cols-2">
             {clusters.map((cluster) => (
-              <Card key={cluster.id} className="bg-card p-5">
+              <Card
+                key={cluster.id}
+                className="p-6 rounded-2xl border-0 transition-all overflow-hidden"
+                style={{
+                  backgroundColor: 'var(--color-bg-card)',
+                  boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
+                  borderLeft: `4px solid ${cluster.color}`
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.boxShadow = '0 4px 12px rgba(0,0,0,0.12)';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.boxShadow = '0 1px 3px rgba(0,0,0,0.1)';
+                }}
+              >
                 <div className="flex items-start gap-3">
+                  {/* Colored dot */}
                   <div
-                    className="h-3 w-3 rounded-full mt-1.5"
+                    className="h-3 w-3 rounded-full mt-1.5 flex-shrink-0"
                     style={{ backgroundColor: cluster.color }}
                   />
-                  <div className="flex-1">
-                    <h3 className="text-base font-medium text-card-foreground">
+
+                  <div className="flex-1 min-w-0">
+                    {/* Title */}
+                    <h3 className="text-base font-semibold truncate" style={{ color: 'var(--color-text-primary)' }}>
                       {cluster.name}
                     </h3>
-                    <p className="mt-1 text-sm text-muted-foreground">
+
+                    {/* Description */}
+                    <p className="mt-1 text-sm line-clamp-2" style={{ color: 'var(--color-text-secondary)' }}>
                       {cluster.description}
                     </p>
+
+                    {/* Related Captures */}
                     <div className="mt-4 space-y-2">
-                      <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                      <p className="text-xs font-medium uppercase tracking-wide" style={{ color: 'var(--color-text-muted)' }}>
                         Related Captures
                       </p>
-                      {cluster.captureIds.map((captureId) => {
-                        const capture = getCaptureById(captureId);
-                        if (!capture) return null;
-                        return (
-                          <div
-                            key={captureId}
-                            className="flex items-center gap-2 rounded-md bg-muted/50 px-3 py-2"
-                          >
-                            <span className="text-sm text-foreground truncate">
-                              {capture.title}
-                            </span>
-                            <ChevronRight className="h-3 w-3 ml-auto text-muted-foreground" />
+                      <div className="space-y-2 max-h-48 overflow-y-auto">
+                        {cluster.captureIds.slice(0, 3).map((captureId) => {
+                          const capture = getCaptureById(captureId);
+                          if (!capture) return null;
+                          return (
+                            <div
+                              key={captureId}
+                              className="flex items-center gap-2 rounded-lg px-3 py-2.5 transition-all cursor-pointer group"
+                              style={{
+                                backgroundColor: 'var(--color-bg-secondary)'
+                              }}
+                              onMouseEnter={(e) => {
+                                e.currentTarget.style.backgroundColor = 'var(--color-bg-tertiary)';
+                                e.currentTarget.style.transform = 'translateX(4px)';
+                              }}
+                              onMouseLeave={(e) => {
+                                e.currentTarget.style.backgroundColor = 'var(--color-bg-secondary)';
+                                e.currentTarget.style.transform = 'translateX(0)';
+                              }}
+                            >
+                              <span className="text-sm truncate flex-1" style={{ color: 'var(--color-text-primary)' }}>
+                                {capture.title}
+                              </span>
+                              <ChevronRight className="h-3.5 w-3.5 flex-shrink-0" style={{ color: 'var(--color-text-muted)' }} />
+                            </div>
+                          );
+                        })}
+                        {cluster.captureIds.length > 3 && (
+                          <div className="text-xs px-3 py-1" style={{ color: 'var(--color-text-muted)' }}>
+                            +{cluster.captureIds.length - 3} more
                           </div>
-                        );
-                      })}
+                        )}
+                      </div>
                     </div>
-                    <div className="mt-4 flex items-center gap-2 text-xs text-muted-foreground">
+
+                    {/* Updated date */}
+                    <div className="mt-4 pt-3 border-t flex items-center gap-2 text-xs" style={{
+                      borderColor: 'var(--color-border-light)',
+                      color: 'var(--color-text-muted)'
+                    }}>
                       <span>Updated {cluster.updatedAt.toLocaleDateString()}</span>
                     </div>
                   </div>

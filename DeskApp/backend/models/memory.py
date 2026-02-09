@@ -1,6 +1,7 @@
 """
 LifeOS - Enhanced Memory Model
 Stores processed knowledge with full references to capture data
+ALL MODELS NOW USE capture_id (not id or capture_ref)
 """
 from pydantic import BaseModel, Field
 from typing import Optional, List, Dict, Any
@@ -23,12 +24,11 @@ class ActionSummary(BaseModel):
 class Memory(BaseModel):
     """
     The Processed Knowledge Record
-    Links to comprehensive CaptureRecord for full details
+    Links to comprehensive CaptureRecord via capture_id
     """
     
     # ========== IDENTIFIERS ==========
-    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
-    capture_ref: str = Field(..., description="Reference to CaptureRecord.id")
+    capture_id: str = Field(..., description="UNIFIED ID - same as CaptureRecord.capture_id")
     user_id: str = Field(..., description="Owner of this memory")
     
     # ========== CONTENT ==========
@@ -101,6 +101,12 @@ class Memory(BaseModel):
     
     # ========== DEPRECATED (Backward Compatibility) ==========
     category: Optional[str] = Field(None, description="DEPRECATED: Use domain instead")
+    
+    # Backward compatibility alias
+    @property
+    def id(self) -> str:
+        """Backward compatibility: return capture_id when accessing .id"""
+        return self.capture_id
     
     def add_created_task(self, task_id: str, title: str, google_id: str = None):
         """Add a created task reference"""

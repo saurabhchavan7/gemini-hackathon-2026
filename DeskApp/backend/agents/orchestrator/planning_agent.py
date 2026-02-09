@@ -1,6 +1,7 @@
 """
 LifeOS - Agent 3: Universal Orchestrator (Multi-Action Processing)
 Role: Process ALL actions from a capture intelligently
+NOW PASSES capture_id to ALL tools
 """
 from datetime import datetime, timedelta
 import re
@@ -63,6 +64,7 @@ class PlanningAgent(AgentBase):
             "overall_summary": str,
             "primary_intent": str,
             "user_id": str,
+            "capture_id": str,
             "user_timezone": str,
             "full_context": str
         }
@@ -86,6 +88,7 @@ class PlanningAgent(AgentBase):
                 actions=actions,
                 domain=domain,
                 user_id=user_id,
+                capture_id=intent_data.get('capture_id'),
                 user_timezone=user_timezone,
                 full_context=full_context
             )
@@ -99,6 +102,7 @@ class PlanningAgent(AgentBase):
         actions: list,
         domain: str,
         user_id: str,
+        capture_id: str,
         user_timezone: str,
         full_context: str
     ) -> dict:
@@ -146,6 +150,7 @@ class PlanningAgent(AgentBase):
                     summary=summary,
                     domain=domain,
                     user_id=user_id,
+                    capture_id=capture_id,
                     user_timezone=user_timezone,
                     priority=priority,
                     due_date=due_date,
@@ -167,9 +172,13 @@ class PlanningAgent(AgentBase):
                 print(f"[ERROR] Action {i} failed: {e}")
                 results.append({"action": summary, "intent": intent, "result": {"status": "error", "message": str(e)}})
         
-        # Summary
+        # Summary (OUTSIDE the for loop!)
         success_count = sum(1 for r in results if r.get('result', {}).get('status') == 'success')
         print(f"[Agent 3] Completed: {success_count}/{len(actions)} actions successful")
+        
+        # Save execution results using capture_id
+        if capture_id and user_id:
+            await self._save_execution_results(user_id, capture_id, results)
         
         return {
             "status": "success" if success_count > 0 else "error",
@@ -177,313 +186,68 @@ class PlanningAgent(AgentBase):
             "successful": success_count,
             "results": results
         }
-
-    async def _execute_action(
+    
+    async def _save_execution_results(
         self,
-        intent: str,
-        summary: str,
-        domain: str,
         user_id: str,
-        user_timezone: str,
-        priority: int,
-        due_date: str,
-        event_time: str,
-        event_end_time: str,
-        attendee_emails: list,
-        attendee_names: list,
-        send_invite: bool,
-        amount: float,
-        location: str,
-        notes: str,
-        tags: list,
-        full_context: str
-    ) -> dict:
-        """Execute a single action with the appropriate tool"""
-        
-        # ==========================================
-        # SCHEDULE INTENT (Calendar Events)
-        # ==========================================
-        if intent == "schedule":
-            print(f"[Agent 3] SCHEDULE: Creating calendar event")
+        capture_id: str,
+        results: list
+    ) -> bool:
+        """Save execution results to separate collection using capture_id"""
+        try:
+            from services.firestore_service import FirestoreService
             
-            # Parse event time
-            parsed_time = self._parse_datetime(event_time, user_timezone)
-            parsed_end = self._parse_datetime(event_end_time, user_timezone) if event_end_time else None
+            db = FirestoreService()
             
-            if not parsed_end and parsed_time:
-                # Default 1 hour duration
-                parsed_end = (datetime.fromisoformat(parsed_time.replace('Z', '+00:00')) + timedelta(hours=1)).isoformat()
+            # Build execution summary
+            execution_doc = {
+                "capture_id": capture_id,
+                "actions": [],
+                "created_at": datetime.utcnow().isoformat()
+            }
             
-            # Domain-specific calendar creation
-            if domain == "health_wellbeing":
-                return create_health_item(
-                    user_id=user_id,
-                    title=summary,
-                    item_type="appointment",
-                    date_time=parsed_time,
-                    notes=notes,
-                    add_to_calendar=True
-                )
-            elif domain == "family_relationships":
-                return create_family_event(
-                    user_id=user_id,
-                    title=summary,
-                    event_type="event",
-                    date_time=parsed_time,
-                    person=attendee_names[0] if attendee_names else None,
-                    notes=notes,
-                    add_to_calendar=True
-                )
-            else:
-                # Standard calendar event
-                return create_calendar_event(
-                    user_id=user_id,
-                    event_title=summary,
-                    start_time=parsed_time,
-                    end_time=parsed_end,
-                    description=notes,
-                    location=location,
-                    user_timezone=user_timezone,
-                    attendees=attendee_emails if attendee_emails else None,
-                    send_invites=send_invite and bool(attendee_emails),
-                    domain=domain
-                )
-        
-        # ==========================================
-        # ACT INTENT (Tasks)
-        # ==========================================
-        elif intent == "act":
-            print(f"[Agent 3] ACT: Creating task")
+            for r in results:
+                result_data = r.get('result', {})
+                
+                action_entry = {
+                    "intent": r.get('intent'),
+                    "summary": r.get('action'),
+                    "status": result_data.get('status', 'unknown'),
+                    "google_task_id": result_data.get('google_task_id'),
+                    "google_event_id": result_data.get('google_event_id'),
+                    "google_calendar_link": result_data.get('google_link'),
+                    "firestore_doc_id": result_data.get('firestore_doc_id'),
+                    "error_message": result_data.get('message') if result_data.get('status') == 'error' else None
+                }
+                
+                execution_doc["actions"].append(action_entry)
             
-            parsed_due = self._parse_date(due_date) if due_date else None
+            # Save to execution_results/{capture_id}
+            doc_ref = db._get_user_ref(user_id).collection("execution_results").document(capture_id)
+            doc_ref.set(execution_doc)
             
-            if domain == "education_learning":
-                return create_learning_item(
-                    user_id=user_id,
-                    title=summary,
-                    item_type="assignment",
-                    notes=notes,
-                    due_date=parsed_due
-                )
-            else:
-                return create_task(
-                    user_id=user_id,
-                    task_title=summary,
-                    notes=notes if notes else f"Priority: {priority}",
-                    due_date=parsed_due,
-                    domain=domain,
-                    priority=priority
-                )
-        
-        # ==========================================
-        # PAY INTENT (Bills)
-        # ==========================================
-        elif intent == "pay":
-            print(f"[Agent 3] PAY: Adding to bills")
+            print(f"[Agent 3] Saved execution to: execution_results/{capture_id}")
             
-            return add_to_bills(
-                user_id=user_id,
-                bill_name=summary,
-                amount=amount or 0.0,
-                due_date=self._parse_date(due_date),
-                category=self._categorize_bill(summary + " " + notes)
-            )
-        
-        # ==========================================
-        # BUY INTENT (Shopping)
-        # ==========================================
-        elif intent == "buy":
-            print(f"[Agent 3] BUY: Adding to shopping/watchlist")
+            # Update main capture with simple flag
+            success_count = sum(1 for r in results if r.get('result', {}).get('status') == 'success')
             
-            if domain == "entertainment_leisure":
-                return add_to_watchlist(
-                    user_id=user_id,
-                    title=summary,
-                    media_type=self._detect_media_type(summary + " " + notes),
-                    notes=notes
-                )
-            else:
-                return add_to_shopping_list(
-                    user_id=user_id,
-                    item_name=summary,
-                    price=amount or 0.0,
-                    domain=domain
-                )
-        
-        # ==========================================
-        # REMEMBER INTENT (Save)
-        # ==========================================
-        elif intent == "remember":
-            print(f"[Agent 3] REMEMBER: Saving to domain storage")
+            field_updates = {
+                "execution.has_data": True,
+                "execution.total_actions": len(results),
+                "execution.successful": success_count,
+                "execution.failed": len(results) - success_count,
+                "execution.completed_at": datetime.utcnow().isoformat(),
+                "timeline.execution_completed": datetime.utcnow().isoformat()
+            }
             
-            if domain == "health_wellbeing":
-                return create_health_item(
-                    user_id=user_id,
-                    title=summary,
-                    item_type="record",
-                    notes=notes,
-                    add_to_calendar=False
-                )
-            elif domain == "travel_movement":
-                return create_travel_item(
-                    user_id=user_id,
-                    title=summary,
-                    item_type="info",
-                    notes=notes
-                )
-            elif domain == "entertainment_leisure":
-                return add_to_watchlist(
-                    user_id=user_id,
-                    title=summary,
-                    media_type=self._detect_media_type(summary + " " + notes),
-                    notes=notes
-                )
-            elif domain == "admin_documents":
-                return save_document(
-                    user_id=user_id,
-                    title=summary,
-                    content=notes or full_context[:1000],
-                    notes=""
-                )
-            else:
-                return create_note(
-                    user_id=user_id,
-                    title=summary,
-                    content=notes or full_context[:1000],
-                    domain=domain,
-                    tags=tags
-                )
-        
-        # ==========================================
-        # LEARN INTENT (Educational)
-        # ==========================================
-        elif intent == "learn":
-            print(f"[Agent 3] LEARN: Creating learning item")
+            await db.update_capture_fields(user_id, capture_id, field_updates)
+            print(f"[Agent 3] ✓ Execution linked to capture {capture_id}")
             
-            return create_learning_item(
-                user_id=user_id,
-                title=summary,
-                item_type="topic",
-                content=full_context[:1000],
-                notes=notes
-            )
-        
-        # ==========================================
-        # TRACK INTENT (Monitoring)
-        # ==========================================
-        elif intent == "track":
-            print(f"[Agent 3] TRACK: Creating tracker")
+            return True
             
-            return create_tracker(
-                user_id=user_id,
-                title=summary,
-                tracker_type=self._detect_tracker_type(summary + " " + notes),
-                domain=domain
-            )
-        
-        # ==========================================
-        # REFERENCE INTENT (Documentation)
-        # ==========================================
-        elif intent == "reference":
-            print(f"[Agent 3] REFERENCE: Saving as reference note")
-            
-            return create_note(
-                user_id=user_id,
-                title=f"Ref: {summary}",
-                content=notes or full_context[:2000],
-                domain=domain,
-                tags=tags + ["reference"]
-            )
-        
-        # ==========================================
-        # RESEARCH INTENT (Delegated)
-        # ==========================================
-        elif intent == "research":
-            print(f"[Agent 3] RESEARCH: Delegating to Research Agent")
-            # Research Agent handles this via event bus
-            return {"status": "delegated", "to": "research_agent"}
-        
-        # ==========================================
-        # COMPARE INTENT (Evaluation)
-        # ==========================================
-        elif intent == "compare":
-            print(f"[Agent 3] COMPARE: Creating comparison")
-            
-            return create_comparison(
-                user_id=user_id,
-                title=summary,
-                notes=notes or full_context[:1000],
-                domain=domain
-            )
-        
-        # ==========================================
-        # FOLLOW_UP INTENT (Reminder)
-        # ==========================================
-        elif intent == "follow_up":
-            print(f"[Agent 3] FOLLOW_UP: Creating reminder")
-            
-            return create_reminder(
-                user_id=user_id,
-                title=summary,
-                remind_date=self._parse_date(due_date),
-                notes=notes,
-                domain=domain
-            )
-        
-        # ==========================================
-        # WAIT INTENT (Pending)
-        # ==========================================
-        elif intent == "wait":
-            print(f"[Agent 3] WAIT: Creating waiting item")
-            
-            return create_waiting_item(
-                user_id=user_id,
-                title=summary,
-                waiting_for=attendee_names[0] if attendee_names else None,
-                notes=notes,
-                domain=domain
-            )
-        
-        # ==========================================
-        # ARCHIVE INTENT (Records)
-        # ==========================================
-        elif intent == "archive":
-            print(f"[Agent 3] ARCHIVE: Archiving item")
-            
-            if domain == "admin_documents":
-                return save_document(
-                    user_id=user_id,
-                    title=summary,
-                    content=notes or full_context[:1000],
-                    notes="Archived"
-                )
-            else:
-                return archive_item(
-                    user_id=user_id,
-                    title=summary,
-                    content=notes or full_context[:1000],
-                    domain=domain
-                )
-        
-        # ==========================================
-        # IGNORE INTENT (Skip)
-        # ==========================================
-        elif intent == "ignore":
-            print(f"[Agent 3] IGNORE: Skipping")
-            return {"status": "skipped", "reason": "ignore intent"}
-        
-        # ==========================================
-        # FALLBACK
-        # ==========================================
-        else:
-            print(f"[Agent 3] UNKNOWN intent '{intent}': Saving as note")
-            return create_note(
-                user_id=user_id,
-                title=summary,
-                content=notes or full_context[:1000],
-                domain=domain,
-                tags=tags
-            )
+        except Exception as e:
+            print(f"[Agent 3] WARNING: Failed to save execution: {e}")
+            return False
 
     async def _process_single_intent(self, intent_data: dict) -> dict:
         """Backward compatibility: Process old single-intent format"""
@@ -516,9 +280,340 @@ class PlanningAgent(AgentBase):
             actions=actions,
             domain=intent_data.get('domain', 'ideas_thoughts'),
             user_id=intent_data.get('user_id'),
+            capture_id=intent_data.get('capture_id'),
             user_timezone=intent_data.get('user_timezone', 'UTC'),
             full_context=intent_data.get('full_context', '')
         )
+
+    async def _execute_action(
+        self,
+        intent: str,
+        summary: str,
+        domain: str,
+        user_id: str,
+        capture_id: str,
+        user_timezone: str,
+        priority: int,
+        due_date: str,
+        event_time: str,
+        event_end_time: str,
+        attendee_emails: list,
+        attendee_names: list,
+        send_invite: bool,
+        amount: float,
+        location: str,
+        notes: str,
+        tags: list,
+        full_context: str
+    ) -> dict:
+        """Execute a single action with the appropriate tool"""
+        
+        # ==========================================
+        # SCHEDULE INTENT (Calendar Events)
+        # ==========================================
+        if intent == "schedule":
+            print(f"[Agent 3] SCHEDULE: Creating calendar event")
+            
+            # Parse event time
+            parsed_time = self._parse_datetime(event_time, user_timezone)
+            parsed_end = self._parse_datetime(event_end_time, user_timezone) if event_end_time else None
+            
+            if not parsed_end and parsed_time:
+                # Default 1 hour duration
+                parsed_end = (datetime.fromisoformat(parsed_time.replace('Z', '+00:00')) + timedelta(hours=1)).isoformat()
+            
+            # Domain-specific calendar creation
+            if domain == "health_wellbeing":
+                return await create_health_item(
+                    user_id=user_id,
+                    title=summary,
+                    item_type="appointment",
+                    date_time=parsed_time,
+                    notes=notes,
+                    add_to_calendar=True,
+                    capture_id=capture_id
+                )
+            elif domain == "family_relationships":
+                return await create_family_event(
+                    user_id=user_id,
+                    title=summary,
+                    event_type="event",
+                    date_time=parsed_time,
+                    person=attendee_names[0] if attendee_names else None,
+                    notes=notes,
+                    add_to_calendar=True,
+                    capture_id=capture_id
+                )
+            else:
+                # Standard calendar event
+                return await create_calendar_event(
+                    user_id=user_id,
+                    event_title=summary,
+                    start_time=parsed_time,
+                    end_time=parsed_end,
+                    description=notes,
+                    location=location,
+                    user_timezone=user_timezone,
+                    attendees=attendee_emails if attendee_emails else None,
+                    send_invites=send_invite and bool(attendee_emails),
+                    domain=domain,
+                    capture_id=capture_id
+                )
+        
+        # ==========================================
+        # ACT INTENT (Tasks)
+        # ==========================================
+        elif intent == "act":
+            print(f"[Agent 3] ACT: Creating task")
+            
+            parsed_due = self._parse_date(due_date) if due_date else None
+            
+            if domain == "education_learning":
+                return await create_learning_item(
+                    user_id=user_id,
+                    title=summary,
+                    item_type="assignment",
+                    notes=notes,
+                    due_date=parsed_due,
+                    capture_id=capture_id
+                )
+            else:
+                return await create_task(
+                    user_id=user_id,
+                    task_title=summary,
+                    notes=notes if notes else f"Priority: {priority}",
+                    due_date=parsed_due,
+                    domain=domain,
+                    priority=priority,
+                    capture_id=capture_id
+                )
+        
+        # ==========================================
+        # PAY INTENT (Bills)
+        # ==========================================
+        elif intent == "pay":
+            print(f"[Agent 3] PAY: Adding to bills")
+            
+            return add_to_bills(
+                user_id=user_id,
+                bill_name=summary,
+                amount=amount or 0.0,
+                due_date=self._parse_date(due_date),
+                category=self._categorize_bill(summary + " " + notes),
+                capture_id=capture_id
+            )
+        
+        # ==========================================
+        # BUY INTENT (Shopping)
+        # ==========================================
+        elif intent == "buy":
+            print(f"[Agent 3] BUY: Adding to shopping/watchlist")
+            
+            if domain == "entertainment_leisure":
+                return add_to_watchlist(
+                    user_id=user_id,
+                    title=summary,
+                    media_type=self._detect_media_type(summary + " " + notes),
+                    notes=notes,
+                    capture_id=capture_id
+                )
+            else:
+                return add_to_shopping_list(
+                    user_id=user_id,
+                    item_name=summary,
+                    price=amount or 0.0,
+                    domain=domain,
+                    capture_id=capture_id
+                )
+        
+        # ==========================================
+        # REMEMBER INTENT (Save)
+        # ==========================================
+        elif intent == "remember":
+            print(f"[Agent 3] REMEMBER: Saving to domain storage")
+            
+            if domain == "health_wellbeing":
+                return await create_health_item(
+                    user_id=user_id,
+                    title=summary,
+                    item_type="record",
+                    notes=notes,
+                    add_to_calendar=False,
+                    capture_id=capture_id
+                )
+            elif domain == "travel_movement":
+                return create_travel_item(
+                    user_id=user_id,
+                    title=summary,
+                    item_type="info",
+                    notes=notes,
+                    capture_id=capture_id
+                )
+            elif domain == "entertainment_leisure":
+                return add_to_watchlist(
+                    user_id=user_id,
+                    title=summary,
+                    media_type=self._detect_media_type(summary + " " + notes),
+                    notes=notes,
+                    capture_id=capture_id
+                )
+            elif domain == "admin_documents":
+                return await save_document(
+                    user_id=user_id,
+                    title=summary,
+                    content=notes or full_context[:1000],
+                    notes="",
+                    capture_id=capture_id
+                )
+            else:
+                return create_note(
+                    user_id=user_id,
+                    title=summary,
+                    content=notes or full_context[:1000],
+                    domain=domain,
+                    tags=tags,
+                    capture_id=capture_id
+                )
+        
+        # ==========================================
+        # LEARN INTENT (Educational)
+        # ==========================================
+        elif intent == "learn":
+            print(f"[Agent 3] LEARN: Creating learning item")
+            
+            return await create_learning_item(
+                user_id=user_id,
+                title=summary,
+                item_type="topic",
+                content=full_context[:1000],
+                notes=notes,
+                capture_id=capture_id
+            )
+        
+        # ==========================================
+        # TRACK INTENT (Monitoring)
+        # ==========================================
+        elif intent == "track":
+            print(f"[Agent 3] TRACK: Creating tracker")
+            
+            return create_tracker(
+                user_id=user_id,
+                title=summary,
+                tracker_type=self._detect_tracker_type(summary + " " + notes),
+                domain=domain,
+                capture_id=capture_id
+            )
+        
+        # ==========================================
+        # REFERENCE INTENT (Documentation)
+        # ==========================================
+        elif intent == "reference":
+            print(f"[Agent 3] REFERENCE: Saving as reference note")
+            
+            return create_note(
+                user_id=user_id,
+                title=f"Ref: {summary}",
+                content=notes or full_context[:2000],
+                domain=domain,
+                tags=tags + ["reference"],
+                capture_id=capture_id
+            )
+        
+        # ==========================================
+        # RESEARCH INTENT (Delegated)
+        # ==========================================
+        elif intent == "research":
+            print(f"[Agent 3] RESEARCH: Delegating to Research Agent")
+            # Research Agent handles this via event bus
+            return {"status": "delegated", "to": "research_agent"}
+        
+        # ==========================================
+        # COMPARE INTENT (Evaluation)
+        # ==========================================
+        elif intent == "compare":
+            print(f"[Agent 3] COMPARE: Creating comparison")
+            
+            return create_comparison(
+                user_id=user_id,
+                title=summary,
+                notes=notes or full_context[:1000],
+                domain=domain,
+                capture_id=capture_id
+            )
+        
+        # ==========================================
+        # FOLLOW_UP INTENT (Reminder)
+        # ==========================================
+        elif intent == "follow_up":
+            print(f"[Agent 3] FOLLOW_UP: Creating reminder")
+            
+            return await create_reminder(
+                user_id=user_id,
+                title=summary,
+                remind_date=self._parse_date(due_date),
+                notes=notes,
+                domain=domain,
+                capture_id=capture_id
+            )
+        
+        # ==========================================
+        # WAIT INTENT (Pending)
+        # ==========================================
+        elif intent == "wait":
+            print(f"[Agent 3] WAIT: Creating waiting item")
+            
+            return await create_waiting_item(
+                user_id=user_id,
+                title=summary,
+                waiting_for=attendee_names[0] if attendee_names else None,
+                notes=notes,
+                domain=domain,
+                capture_id=capture_id
+            )
+        
+        # ==========================================
+        # ARCHIVE INTENT (Records)
+        # ==========================================
+        elif intent == "archive":
+            print(f"[Agent 3] ARCHIVE: Archiving item")
+            
+            if domain == "admin_documents":
+                return await save_document(
+                    user_id=user_id,
+                    title=summary,
+                    content=notes or full_context[:1000],
+                    notes="Archived",
+                    capture_id=capture_id
+                )
+            else:
+                return archive_item(
+                    user_id=user_id,
+                    title=summary,
+                    content=notes or full_context[:1000],
+                    domain=domain,
+                    capture_id=capture_id
+                )
+        
+        # ==========================================
+        # IGNORE INTENT (Skip)
+        # ==========================================
+        elif intent == "ignore":
+            print(f"[Agent 3] IGNORE: Skipping")
+            return {"status": "skipped", "reason": "ignore intent"}
+        
+        # ==========================================
+        # FALLBACK
+        # ==========================================
+        else:
+            print(f"[Agent 3] UNKNOWN intent '{intent}': Saving as note")
+            return create_note(
+                user_id=user_id,
+                title=summary,
+                content=notes or full_context[:1000],
+                domain=domain,
+                tags=tags,
+                capture_id=capture_id
+            )
 
     # ==========================================
     # HELPER METHODS

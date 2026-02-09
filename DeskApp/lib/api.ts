@@ -10,8 +10,9 @@ import type {
   UserSettings,
   CaptureStatus,
 } from "@/types/lifeos";
-import { getInbox, getCaptureById } from './api-client';
+import { getInbox, getCaptureById , getCaptureByIdV2} from './api-client';
 import { mapMemoryToCaptureItem } from './mappers';
+
 
 // Mock Data
 const mockCaptures: CaptureItem[] = [
@@ -406,6 +407,7 @@ export async function getCapture(id: string): Promise<CaptureItem | null> {
   try {
     if (typeof window !== 'undefined') {
       const result = await getCaptureById(id) as any;
+      
       if (result.success && result.capture) {
         return mapMemoryToCaptureItem(result.capture);
       }
@@ -414,6 +416,58 @@ export async function getCapture(id: string): Promise<CaptureItem | null> {
   } catch (error) {
     console.error('❌ [API] Failed to get capture:', error);
     return null;
+  }
+}
+
+/**
+ * Get full comprehensive capture details (including original inputs)
+ * Used by detail drawer to show screenshot, audio, text notes, files
+ */
+export async function getCaptureDetails(id: string): Promise<any> {
+  try {
+    console.log('🔍 [API] Fetching full capture details:', id);
+    
+    if (typeof window !== 'undefined') {
+      const result = await getCaptureById(id) as any;
+      
+      if (result.success && result.capture) {
+        console.log('✅ [API] Got full capture details');
+        return result.capture; // Return complete comprehensive capture with input data
+      }
+    }
+    
+    console.warn('⚠️ [API] No capture details found');
+    return null;
+    
+  } catch (error) {
+    console.error('❌ [API] Failed to get capture details:', error);
+    return null;
+  }
+}
+
+export async function getCaptureDetailsV2(id: string): Promise<any> {
+  try {
+    console.log('🔍 [API V2] Fetching enhanced capture details:', id);
+    
+    if (typeof window !== 'undefined') {
+      const result = await getCaptureByIdV2(id) as any;
+      
+      if (result.success && result.capture) {
+        console.log('✅ [API V2] Got enhanced capture with subcollections');
+        console.log('🔬 [API V2] Research sources:', result.metadata?.research_sources_count || 0);
+        console.log('📚 [API V2] Learning resources:', result.metadata?.resources_count || 0);
+        return result.capture;
+      }
+    }
+    
+    console.warn('⚠️ [API V2] No capture details found');
+    return null;
+    
+  } catch (error) {
+    console.error('❌ [API V2] Failed to get capture details:', error);
+    // Fallback to v1 if v2 fails
+    console.log('🔄 [API V2] Falling back to v1 endpoint');
+    return getCaptureDetails(id);
   }
 }
 
@@ -434,10 +488,7 @@ export async function deleteCapture(id: string): Promise<boolean> {
   return true;
 }
 
-export async function listClusters(): Promise<ThemeCluster[]> {
-  await delay(100);
-  return [...mockClusters];
-}
+
 
 export async function listConnections(): Promise<ConnectionEdge[]> {
   await delay(100);
@@ -464,10 +515,10 @@ export async function markNotificationRead(id: string): Promise<boolean> {
   return false;
 }
 
-export async function listCollections(): Promise<SmartCollection[]> {
-  await delay(100);
-  return [...mockCollections];
-}
+// export async function listCollections(): Promise<SmartCollection[]> {
+//   await delay(100);
+//   return [...mockCollections];
+// }
 
 export async function getSettings(): Promise<UserSettings> {
   await delay(50);
@@ -484,4 +535,70 @@ export async function updateSettings(updates: Partial<UserSettings>): Promise<Us
 export function resetState() {
   capturesState = [...mockCaptures];
   notificationsState = [...mockNotifications];
+}
+
+import { getCollections as apiGetCollections } from './api-client';
+
+export async function listCollections(): Promise<SmartCollection[]> {
+  try {
+    console.log('📁 [API] Fetching collections...');
+    
+    if (typeof window !== 'undefined') {
+      try {
+        const result = await apiGetCollections();
+        console.log(`✅ [API] Got ${result.collections.length} collections`);
+        return result.collections;
+      } catch (error) {
+        console.error('❌ [API] Failed to fetch collections:', error);
+        return [];
+      }
+    }
+    
+    return [];
+  } catch (error) {
+    console.error('❌ [API] Failed to fetch collections:', error);
+    return [];
+  }
+
+}
+
+import { getThemeClusters as apiGetThemeClusters } from './api-client';
+
+export async function listClusters(): Promise<ThemeCluster[]> {
+  try {
+    console.log('🎨 [API] Fetching theme clusters...');
+    
+    if (typeof window !== 'undefined') {
+      try {
+        const result = await apiGetThemeClusters(4);
+        
+        if (result.clusters.length === 0 && result.message) {
+          console.log('⚠️ [API]', result.message);
+          return []; // Return empty, let UI show empty state
+        }
+        
+        console.log(`✅ [API] Got ${result.clusters.length} theme clusters`);
+        
+        // Convert backend format to frontend ThemeCluster type
+        return result.clusters.map((cluster: any) => ({
+          id: cluster.id,
+          name: cluster.name,
+          description: cluster.description,
+          captureIds: cluster.captureIds,
+          createdAt: new Date(cluster.createdAt || Date.now()),
+          updatedAt: new Date(cluster.updatedAt || Date.now()),
+          color: cluster.color
+        }));
+        
+      } catch (error) {
+        console.error('❌ [API] Failed to fetch clusters:', error);
+        return [];
+      }
+    }
+    
+    return [];
+  } catch (error) {
+    console.error('❌ [API] Failed to fetch clusters:', error);
+    return [];
+  }
 }

@@ -3,6 +3,66 @@
 
 @custom-variant dark (&:is(.dark *));
 
+/* Base44 Google-Inspired Theme Variables */
+
+:root {
+  /* Light Theme Colors */
+  --bg-primary: #ffffff;
+  --bg-secondary: #f8f9fa;
+  --bg-tertiary: #f1f3f5;
+  --bg-card: #ffffff;
+  --bg-card-hover: #fafbfc;
+  
+  --border-light: #e9ecef;
+  --border-default: #dee2e6;
+  --border-focus: #4285f4;
+  
+  --text-primary: #202124;
+  --text-secondary: #5f6368;
+  --text-muted: #9aa0a6;
+  --text-link: #1a73e8;
+  
+  --accent-blue: #1a73e8;
+  --accent-blue-light: #e8f0fe;
+  --accent-blue-hover: #1557b0;
+  --accent-orange: #ea8600;
+  --accent-orange-light: #fef3e0;
+  --accent-green: #34a853;
+  --accent-green-light: #e6f4ea;
+  --accent-red: #ea4335;
+  --accent-red-light: #fce8e6;
+}
+
+.dark {
+  /* Dark Theme Colors */
+  --bg-primary: #0f0f0f;
+  --bg-secondary: #1a1a1a;
+  --bg-tertiary: #252525;
+  --bg-card: #1e2128;
+  --bg-card-hover: #282c34;
+  
+  --border-light: #2d2d2d;
+  --border-default: #3c3c3c;
+  --border-focus: #8ab4f8;
+  
+  --text-primary: #e8eaed;
+  --text-secondary: #9aa0a6;
+  --text-muted: #5f6368;
+  --text-link: #8ab4f8;
+  
+  --accent-blue: #8ab4f8;
+  --accent-blue-light: rgba(138, 180, 248, 0.15);
+  --accent-blue-hover: #adc6ff;
+  --accent-orange: #ffa726;
+  --accent-orange-light: rgba(255, 167, 38, 0.15);
+  --accent-green: #81c995;
+  --accent-green-light: rgba(129, 201, 149, 0.15);
+  --accent-red: #f28b82;
+  --accent-red-light: rgba(242, 139, 130, 0.15);
+}
+
+
+
 :root {
   --background: oklch(1 0 0);
   --foreground: oklch(0.145 0 0);

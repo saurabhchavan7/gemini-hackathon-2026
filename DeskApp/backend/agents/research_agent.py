@@ -5,7 +5,8 @@ Role: Smart research activation for technical problems, learning, and decisions
 from agents.base import AgentBase
 from google.genai import types
 from services.firestore_service import FirestoreService
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
+from datetime import datetime
 
 
 class ResearchAgent(AgentBase):
@@ -125,6 +126,7 @@ ALWAYS:
             if user_id and research_text:
                 await self._save_research(
                     user_id=user_id,
+                    capture_id=data.get("capture_id"),
                     query=research_query,
                     research_type=research_type,
                     results=research_text,
@@ -339,6 +341,7 @@ Be helpful and specific."""
     async def _save_research(
         self,
         user_id: str,
+        capture_id: Optional[str],
         query: str,
         research_type: str,
         results: str,
@@ -346,23 +349,45 @@ Be helpful and specific."""
     ):
         """Save research results to Firestore"""
         try:
-            from datetime import datetime
-            
             db = FirestoreService()
             
             research_doc = {
                 "query": query,
                 "research_type": research_type,
-                "results": results[:5000],  # Limit size
+                "results": results[:5000],
                 "sources_count": sources_count,
                 "created_at": datetime.utcnow().isoformat(),
-                "status": "completed"
+                "status": "completed",
+                "capture_id": capture_id
             }
             
-            doc_ref = db._get_user_ref(user_id).collection("research_results").document()
+            # Use capture_id as document ID (unified linkage)
+            if capture_id:
+                doc_ref = db._get_user_ref(user_id).collection("research_results").document(capture_id)
+            else:
+                doc_ref = db._get_user_ref(user_id).collection("research_results").document()
+            
             doc_ref.set(research_doc)
             
-            print(f"[Agent 4] Saved research to Firestore: {doc_ref.id}")
+            print(f"[Agent 4] Saved research to: research_results/{doc_ref.id}")
             
+            # Update main capture with flag
+            if capture_id:
+                try:
+                    field_updates = {
+                        "research.has_data": True,
+                        "research.completed_at": datetime.utcnow().isoformat(),
+                        "research.sources_count": sources_count,
+                        "research.query": query,
+                        "research.research_type": research_type,
+                        "timeline.research_completed": datetime.utcnow().isoformat()
+                    }
+                    
+                    await db.update_capture_fields(user_id, capture_id, field_updates)
+                    print(f"[Agent 4] ✓ Research linked to capture {capture_id}")
+                    
+                except Exception as e:
+                    print(f"[Agent 4] WARNING: Failed to update capture: {e}")
+                    
         except Exception as e:
             print(f"[ERROR] Failed to save research: {e}")

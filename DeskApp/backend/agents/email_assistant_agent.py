@@ -43,8 +43,22 @@ class EmailAssistantAgent(AgentBase):
             
             "DRAFT RULES:\n"
             "- Match original email's tone and formality\n"
-            "- Be brief but complete\n"
-            "- Include appropriate signature\n"
+            "- Be brief but complete (50-100 words)\n"
+            "- Use proper email structure:\n"
+            "  * Greeting: 'Hi [FirstName],'\n"
+            "  * Body: 2-3 short paragraphs\n"
+            "  * Closing: 'Best regards,' or 'Thanks,'\n"
+            "  * Signature: 'Saurabh'\n"
+            "- Use double line breaks between sections\n"
+            "- No placeholders like [Your Name]\n"
+            "- No emojis\n\n"
+            
+            "EXAMPLE EMAIL:\n"
+            "Hi Sarah,\n\n"
+            "Thanks for reaching out about the project timeline.\n\n"
+            "I'll have the draft ready by Friday afternoon. I'll send it over as soon as it's complete.\n\n"
+            "Best regards,\n"
+            "Saurabh\n"
         )
         super().__init__(
             model_id="gemini-2.5-flash",
@@ -142,20 +156,14 @@ class EmailAssistantAgent(AgentBase):
             print(f"[Agent 9] Generating draft for: {email['subject'][:50]}")
             
             prompt = (
-                f"Generate a reply to this email:\n\n"
-                f"Original Email:\n"
+                f"Reply to this email:\n\n"
                 f"From: {email['from_name']}\n"
                 f"Subject: {email['subject']}\n"
                 f"Body: {email['body']}\n\n"
-                f"Context:\n"
-                f"- Urgency: {analysis.urgency}/5\n"
+                f"Requirements:\n"
+                f"- Tone: {analysis.suggested_tone}\n"
                 f"- Address: {analysis.reply_context}\n"
-                f"- Tone: {analysis.suggested_tone}\n\n"
-                f"Generate a {analysis.suggested_tone} reply that:\n"
-                f"1. Addresses key points\n"
-                f"2. Uses suggested tone\n"
-                f"3. Brief but complete\n"
-                f"4. Appropriate closing\n"
+                f"- Keep it brief and professional\n"
             )
             
             from google import genai
@@ -168,6 +176,7 @@ class EmailAssistantAgent(AgentBase):
                 model="gemini-2.5-flash",
                 contents=prompt,
                 config=types.GenerateContentConfig(
+                    system_instruction=self.system_instruction,
                     response_mime_type="application/json",
                     response_schema=DraftEmail
                 )

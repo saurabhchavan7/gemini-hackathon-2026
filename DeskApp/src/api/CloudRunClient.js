@@ -299,7 +299,132 @@ async getCaptureById(captureId) {
     console.error('❌ [CloudRunClient] Failed to get capture:', error.message);
     throw new Error('Failed to retrieve capture details');
   }
-}
+},
+
+async getCollections() {
+  try {
+    console.log('📁 [CloudRunClient] Fetching collections');
+    
+    const response = await apiClient.get('/api/collections');
+    
+    console.log(`✅ [CloudRunClient] Retrieved ${response.data.collections?.length || 0} collections`);
+    
+    return {
+      success: true,
+      collections: response.data.collections || [],
+      total: response.data.total || 0
+    };
+    
+  } catch (error) {
+    console.error('❌ [CloudRunClient] Failed to get collections:', error.message);
+    throw new Error('Failed to retrieve collections');
+  }
+},
+
+async getThemeClusters(numClusters = 4) {
+  try {
+    console.log('🎨 [CloudRunClient] Fetching theme clusters');
+    
+    const response = await apiClient.get(`/api/synthesis/clusters?num_clusters=${numClusters}`);
+    
+    console.log(`✅ [CloudRunClient] Retrieved ${response.data.clusters?.length || 0} clusters`);
+    
+    return {
+      success: true,
+      clusters: response.data.clusters || [],
+      total: response.data.total || 0,
+      message: response.data.message
+    };
+    
+  } catch (error) {
+    console.error('❌ [CloudRunClient] Failed to get theme clusters:', error.message);
+    throw new Error('Failed to retrieve theme clusters');
+  }
+},
+
+async askQuestion(question, filterDomain = null, token = null) {
+  try {
+    console.log('🤔 [CloudRunClient] Asking question:', question);
+    
+    if (!token) {
+      throw new Error('Not authenticated');
+    }
+    
+    const FormData = require('form-data');
+    const form = new FormData();
+    form.append('question', question);
+    if (filterDomain) {
+      form.append('filter_domain', filterDomain);
+    }
+    
+    const response = await apiClient.post('/api/ask', form, {
+      headers: {
+        ...form.getHeaders(),
+        'Authorization': `Bearer ${token}`
+      }
+    });
+    
+    console.log('✅ [CloudRunClient] Got answer');
+    
+    return {
+      success: true,
+      question: response.data.question,
+      answer: response.data.answer,
+      sources: response.data.sources || [],
+      confidence: response.data.confidence || 'medium'
+    };
+    
+  } catch (error) {
+    console.error('❌ [CloudRunClient] Failed to ask question:', error.message);
+    throw new Error('Failed to get answer');
+  }
+},
+
+async getProactiveNotifications() {
+  try {
+    console.log('🔔 [CloudRunClient] Fetching proactive notifications');
+    
+    const response = await apiClient.get('/api/notifications/proactive');
+    
+    console.log(`✅ [CloudRunClient] Got ${response.data.notifications?.length || 0} notifications`);
+    
+    return {
+      success: true,
+      notifications: response.data.notifications || [],
+      count: response.data.count || 0
+    };
+    
+  } catch (error) {
+    console.error('❌ [CloudRunClient] Failed to get notifications:', error.message);
+    return { success: false, notifications: [], count: 0 };
+  }
+},
+
+async getCaptureById(captureId) {
+  try {
+    console.log(`🔍 [CloudRunClient] Fetching capture: ${captureId}`);
+    const response = await apiClient.get(`/api/capture/${captureId}/full`);
+    return { success: true, capture: response.data.capture };
+  } catch (error) {
+    console.error('❌ [CloudRunClient] Failed:', error.message);
+    return { success: false, error: error.message };
+  }
+},
+
+async getCaptureByIdV2(captureId) {
+  try {
+    console.log(`🔍 [CloudRunClient V2] Fetching enhanced capture: ${captureId}`);
+    const response = await apiClient.get(`/api/v2/capture/${captureId}/full`);
+    console.log(`✅ [CloudRunClient V2] Got ${response.data.metadata.research_sources_count} research sources`);
+    console.log(`📚 [CloudRunClient V2] Got ${response.data.metadata.resources_count} learning resources`);
+    return { success: true, capture: response.data.capture, metadata: response.data.metadata };
+  } catch (error) {
+    console.error('❌ [CloudRunClient V2] Failed:', error.message);
+    return { success: false, error: error.message };
+  }
+},
+
+
 
 };
 

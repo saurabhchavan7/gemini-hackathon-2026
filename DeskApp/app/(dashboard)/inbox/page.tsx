@@ -9,7 +9,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { ChevronDown, ArrowUpDown, Inbox as InboxIcon } from "lucide-react";
+import { ChevronDown, ArrowUpDown, Inbox as InboxIcon, RefreshCw } from "lucide-react";
 import { CaptureListItem } from "@/components/lifeos/capture-list-item";
 import { useLifeOS } from "@/components/lifeos/lifeos-provider";
 import type { CaptureItem, CaptureStatus } from "@/types/lifeos";
@@ -25,27 +25,34 @@ const sortOptions: { value: SortOption; label: string }[] = [
 
 const tabFilters: { value: TabFilter; label: string; count?: (items: CaptureItem[]) => number }[] = [
   { value: "all", label: "All" },
-  { 
-    value: "unreviewed", 
+  {
+    value: "unreviewed",
     label: "Unreviewed",
     count: (items) => items.filter(i => i.status === "unreviewed").length
   },
-  { 
-    value: "snoozed", 
+  {
+    value: "snoozed",
     label: "Snoozed",
     count: (items) => items.filter(i => i.status === "snoozed").length
   },
-  { 
-    value: "expiring", 
+  {
+    value: "expiring",
     label: "Expiring",
     count: (items) => items.filter(i => i.deadline && new Date(i.deadline).getTime() - Date.now() < 7 * 24 * 60 * 60 * 1000).length
   },
 ];
 
 export default function InboxPage() {
-  const { captures, isLoading, selectItem, selectedItem } = useLifeOS();
+  const { captures, isLoading, selectItem, selectedItem, refreshCaptures } = useLifeOS();
   const [activeTab, setActiveTab] = useState<TabFilter>("all");
   const [sortBy, setSortBy] = useState<SortOption>("newest");
+  const [isRefreshing, setIsRefreshing] = useState(false);
+
+  const handleRefresh = async () => {
+    setIsRefreshing(true);
+    await refreshCaptures();
+    setIsRefreshing(false);
+  };
 
   const filteredAndSortedCaptures = useMemo(() => {
     let filtered = [...captures];
@@ -98,65 +105,97 @@ export default function InboxPage() {
   }
 
   return (
-    <div className="flex flex-col h-full">
-      {/* Header */}
-      <div className="flex items-center justify-between border-b border-border px-6 py-4">
-        <div className="flex items-center gap-3">
-          <InboxIcon className="h-5 w-5 text-muted-foreground" />
-          <h1 className="text-xl font-semibold text-foreground">Inbox</h1>
-          <span className="rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground">
-            {captures.length} items
-          </span>
-        </div>
-
-        {/* Sort dropdown */}
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button variant="outline" size="sm" className="gap-2 bg-transparent">
-              <ArrowUpDown className="h-3.5 w-3.5" />
-              {sortOptions.find((o) => o.value === sortBy)?.label}
-              <ChevronDown className="h-3.5 w-3.5" />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
-            {sortOptions.map((option) => (
-              <DropdownMenuItem
-                key={option.value}
-                onClick={() => setSortBy(option.value)}
-                className={sortBy === option.value ? "bg-accent" : ""}
-              >
-                {option.label}
-              </DropdownMenuItem>
-            ))}
-          </DropdownMenuContent>
-        </DropdownMenu>
-      </div>
+    <div className="flex flex-col h-full" style={{ backgroundColor: 'var(--color-bg-primary)' }}>      
+   {/* Header */}
+<div className="px-6 py-5">
+  <div className="flex items-start justify-between mb-1">
+    <div>
+      <h1 className="text-2xl font-semibold" style={{ color: 'var(--color-text-primary)' }}>Inbox</h1>
+      <p className="text-sm mt-0.5" style={{ color: 'var(--color-text-secondary)' }}>
+        {captures.length} item{captures.length !== 1 ? 's' : ''} need{captures.length === 1 ? 's' : ''} your attention
+      </p>
+    </div>
+    
+    <div className="flex items-center gap-2">
+      {/* Refresh */}
+      <Button
+        variant="ghost"
+        size="sm"
+        onClick={handleRefresh}
+        disabled={isRefreshing}
+        className="h-9 w-9 rounded-full p-0"
+      >
+        <RefreshCw className={`h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`} />
+      </Button>
+    </div>
+  </div>
+</div>
 
       {/* Tabs */}
       <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as TabFilter)} className="flex-1 flex flex-col">
-        <div className="border-b border-border px-6">
-          <TabsList className="h-12 bg-transparent p-0 gap-6">
-            {tabFilters.map((tab) => {
-              const count = tab.count ? tab.count(captures) : null;
-              return (
-                <TabsTrigger
-                  key={tab.value}
-                  value={tab.value}
-                  className="h-12 rounded-none border-b-2 border-transparent px-0 data-[state=active]:border-accent data-[state=active]:bg-transparent data-[state=active]:shadow-none"
-                >
-                  {tab.label}
-                  {count !== null && count > 0 && (
-                    <span className="ml-2 rounded-full bg-accent/20 px-1.5 py-0.5 text-xs text-accent">
-                      {count}
-                    </span>
-                  )}
-                </TabsTrigger>
-              );
-            })}
-          </TabsList>
-        </div>
+  <div className="px-6 mb-4">
+    <TabsList className="h-10 bg-transparent p-0 gap-2 inline-flex">
+      {tabFilters.map((tab) => {
+        const count = tab.count ? tab.count(captures) : null;
+        return (
+          <TabsTrigger
+  key={tab.value}
+  value={tab.value}
+  className="h-10 px-4 rounded-full border-0 data-[state=active]:shadow-none font-medium text-sm transition-all"
+  style={{
+    backgroundColor: tab.value === activeTab ? 'var(--color-accent-blue)' : 'transparent',
+    color: tab.value === activeTab ? '#ffffff' : 'var(--color-text-secondary)',
+  }}
+  onMouseEnter={(e) => {
+    if (tab.value !== activeTab) {
+      e.currentTarget.style.backgroundColor = 'var(--color-bg-tertiary)';
+    }
+  }}
+  onMouseLeave={(e) => {
+    if (tab.value !== activeTab) {
+      e.currentTarget.style.backgroundColor = 'transparent';
+    }
+  }}
+>
+            {tab.label}
+            {count !== null && count > 0 && (
+              <span 
+                className="ml-2 px-1.5 py-0.5 text-xs rounded-full font-medium"
+                style={{
+                  backgroundColor: tab.value === activeTab ? 'rgba(255,255,255,0.2)' : 'var(--color-bg-tertiary)',
+                  color: tab.value === activeTab ? '#ffffff' : 'var(--color-text-secondary)'
+                }}
+              >
+                {count}
+              </span>
+            )}
+          </TabsTrigger>
+        );
+      })}
+    </TabsList>
+    {/* Sort Dropdown */}
+  <DropdownMenu>
+    <DropdownMenuTrigger asChild>
+      <Button variant="outline" size="sm" className="gap-2 h-9">
+        <ArrowUpDown className="h-3.5 w-3.5" />
+        {sortOptions.find((o) => o.value === sortBy)?.label}
+        <ChevronDown className="h-3.5 w-3.5" />
+      </Button>
+    </DropdownMenuTrigger>
+    <DropdownMenuContent align="end">
+      {sortOptions.map((option) => (
+        <DropdownMenuItem
+          key={option.value}
+          onClick={() => setSortBy(option.value)}
+        >
+          {option.label}
+        </DropdownMenuItem>
+      ))}
+    </DropdownMenuContent>
+  </DropdownMenu>
+  </div>
 
-        <TabsContent value={activeTab} className="flex-1 overflow-auto p-6 mt-0">
+<TabsContent value={activeTab} className="flex-1 overflow-auto p-6 mt-0" style={{ backgroundColor: 'var(--color-bg-secondary)' }}>
           {filteredAndSortedCaptures.length === 0 ? (
             <div className="flex h-64 flex-col items-center justify-center text-center">
               <InboxIcon className="h-12 w-12 text-muted-foreground/50" />

@@ -11,7 +11,6 @@ import {
   FileText,
   Bell,
   Settings,
-  Zap,
 } from "lucide-react";
 
 const navItems = [
@@ -28,48 +27,53 @@ export function Sidebar() {
   const pathname = usePathname();
 
   return (
-    <aside className="flex h-full w-56 flex-col border-r border-sidebar-border bg-sidebar">
+    <aside className="flex h-full w-[72px] flex-col items-center border-r py-4" style={{ backgroundColor: 'var(--color-bg-primary)', borderColor: 'var(--color-border-light)' }}>
       {/* Logo */}
-      <div className="flex h-14 items-center gap-2 border-b border-sidebar-border px-4">
-        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-accent">
-          <Zap className="h-4 w-4 text-accent-foreground" />
+      <div className="mb-6">
+        <div className="flex h-10 w-10 items-center justify-center rounded-full" style={{ background: 'linear-gradient(135deg, var(--color-accent-blue) 0%, var(--color-accent-orange) 100%)' }}>
+          <span className="text-lg font-bold text-white">L</span>
         </div>
-        <span className="text-lg font-semibold text-sidebar-foreground">LifeOS</span>
       </div>
 
       {/* Navigation */}
-      <nav className="flex-1 space-y-1 p-3">
+      <nav className="flex flex-1 flex-col items-center gap-2">
         {navItems.map((item) => {
           const isActive = pathname === item.href || pathname.startsWith(`${item.href}/`);
           return (
             <Link
-              key={item.href}
-              href={item.href}
-              className={cn(
-                "flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors",
-                "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring",
-                isActive
-                  ? "bg-sidebar-accent text-sidebar-accent-foreground"
-                  : "text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground"
-              )}
+  key={item.href}
+  href={item.href}
+  className="flex h-12 w-12 items-center justify-center rounded-xl transition-all duration-200 hover:scale-105"
+  style={{
+    backgroundColor: isActive ? 'var(--color-accent-blue-light)' : 'transparent',
+    color: isActive ? 'var(--color-accent-blue)' : 'var(--color-text-secondary)',
+  }}
+  onMouseEnter={(e) => {
+    if (!isActive) {
+      e.currentTarget.style.backgroundColor = 'var(--color-bg-tertiary)';
+    }
+  }}
+  onMouseLeave={(e) => {
+    if (!isActive) {
+      e.currentTarget.style.backgroundColor = 'transparent';
+    }
+  }}
+              title={item.label}
+              aria-label={item.label}
               aria-current={isActive ? "page" : undefined}
             >
-              <item.icon className="h-4 w-4" aria-hidden="true" />
-              {item.label}
+              <item.icon className="h-5 w-5" aria-hidden="true" />
             </Link>
           );
         })}
       </nav>
 
-      {/* Bottom section */}
-      <div className="border-t border-sidebar-border p-3">
-        <div className="rounded-md bg-sidebar-accent/50 p-3">
-          <p className="text-xs text-sidebar-foreground/60">
-            Local-first storage enabled
-          </p>
-          <p className="mt-1 text-xs font-medium text-sidebar-foreground/80">
-            All data stays on your device
-          </p>
+      {/* Settings at bottom */}
+      <div className="mt-auto">
+        <div className="h-8 w-8 rounded-full" style={{ backgroundColor: 'var(--color-bg-tertiary)' }}>
+          <span className="flex h-full w-full items-center justify-center text-xs font-medium" style={{ color: 'var(--color-text-primary)' }}>
+            U
+          </span>
         </div>
       </div>
     </aside>

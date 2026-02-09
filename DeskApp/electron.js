@@ -22,10 +22,9 @@ const axios = require('axios');
 const { app, BrowserWindow, ipcMain, globalShortcut, desktopCapturer, screen, Notification, dialog } = require('electron');
 const path = require('path');
 const fs = require('fs');
-
-
 // Import electron-store - it's an ES module, so we need to import it differently
 let Store;
+let authStore;
 let store;
 let notificationWindow = null;
 
@@ -109,31 +108,30 @@ ipcMain.handle('show-capture-notification', async (event, data) => {
 
   try {
     notificationWindow = new BrowserWindow({
-      width: 420,
-      height: 360,
-      frame: false,
-      transparent: true,
-      alwaysOnTop: true,
-      resizable: false,
-      skipTaskbar: true,
-      show: false,
-      webPreferences: {
-        preload: path.join(__dirname, 'preload.js'),
-        contextIsolation: true,
-        nodeIntegration: false,
-        devTools: true
+      width: 380,
+    height: 240,
+    frame: false,
+    transparent: true,
+    alwaysOnTop: true,
+    resizable: false,
+    skipTaskbar: true,
+    show: false,
+    webPreferences: {
+      preload: path.join(__dirname, 'preload.js'),
+      contextIsolation: true,
+      nodeIntegration: false,
+      devTools: true
         // IMPORTANT: do NOT add sandbox:true
       }
     });
 
-    // Bottom-right like Teams
     const display = screen.getPrimaryDisplay();
-    const { x, y, width, height } = display.workArea;
-    const margin = 16;
-    notificationWindow.setPosition(
-      x + width - 420 - margin,
-      y + height - 360 - margin
-    );
+  const { x, y, width, height } = display.workArea;
+  const margin = 20;
+  notificationWindow.setPosition(
+    x + width - 380 - margin,
+    y + height - 240 - margin
+  );
 
     const notificationPath = path.join(__dirname, 'src', 'components', 'CaptureNotification.html');
     console.log('📄 Loading notification from:', notificationPath);
@@ -202,6 +200,18 @@ ipcMain.handle('api-get-capture', async (event, captureId) => {
   }
 });
 
+ipcMain.handle('api-get-capture-v2', async (event, captureId) => {
+  try {
+    console.log('📄 [IPC V2] Getting enhanced capture:', captureId);
+    const result = await CloudRunClient.getCaptureByIdV2(captureId);
+    return result;
+  } catch (error) {
+    console.error('❌ [IPC V2] Failed to get capture:', error);
+    // Fallback to v1
+    console.log('🔄 [IPC V2] Falling back to v1');
+    return CloudRunClient.getCaptureById(captureId);
+  }
+});
 
 
 ipcMain.handle('api-ask-capture', async (event, captureId, question) => {
@@ -247,6 +257,22 @@ async function initializeStore() {
       captureShortcut: 'CommandOrControl+Shift+L'
     }
   });
+}
+
+async function initializeStores() {
+  Store = (await import('electron-store')).default;
+  
+  authStore = new Store({ name: 'auth' });
+  
+  store = new Store({
+    defaults: {
+      buttonPosition: { x: 100, y: 100 },
+      buttonVisible: true,
+      captureShortcut: 'CommandOrControl+Shift+L'
+    }
+  });
+  
+  console.log('✅ Stores initialized');
 }
 
 let mainWindow = null;
@@ -1202,29 +1228,242 @@ ipcMain.handle('send-audio-note', async (event, data) => {
   }
 });
 
+ipcMain.handle('api-get-collections', async (event) => {
+  try {
+    console.log('📁 [IPC] Getting collections');
+    const result = await CloudRunClient.getCollections();
+    console.log('✅ [IPC] Collections retrieved:', result.total);
+    return result;
+  } catch (error) {
+    console.error('❌ [IPC] Failed to get collections:', error);
+    return { success: false, collections: [], total: 0 };
+  }
+});
+
+ipcMain.handle('api-get-theme-clusters', async (event, numClusters = 4) => {
+  try {
+    console.log('🎨 [IPC] Getting theme clusters');
+    const result = await CloudRunClient.getThemeClusters(numClusters);
+    console.log('✅ [IPC] Clusters retrieved:', result.total);
+    return result;
+  } catch (error) {
+    console.error('❌ [IPC] Failed to get clusters:', error);
+    return { success: false, clusters: [], total: 0 };
+  }
+});
+
+ipcMain.handle('api-ask-question', async (event, question, filterDomain) => {
+  try {
+    console.log('🤔 [IPC] Asking question:', question);
+    
+    // Get token from TokenManager (which knows the correct key)
+    const TokenManager = require('./src/auth/TokenManager');
+    const token = await TokenManager.getToken();
+    
+    if (!token) {
+      throw new Error('Not authenticated');
+    }
+    
+    const result = await CloudRunClient.askQuestion(question, filterDomain, token);
+    console.log('✅ [IPC] Got answer');
+    return result;
+  } catch (error) {
+    console.error('❌ [IPC] Failed to ask question:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+// Add IPC handler for getting proactive notifications
+ipcMain.handle('api-get-proactive-notifications', async (event) => {
+  try {
+    console.log('🔔 [IPC] Getting proactive notifications');
+    const result = await CloudRunClient.getProactiveNotifications();
+    console.log('✅ [IPC] Got', result.count, 'notifications');
+    return result;
+  } catch (error) {
+    console.error('❌ [IPC] Failed to get proactive notifications:', error);
+    return { success: false, notifications: [], count: 0 };
+  }
+});
+
+ipcMain.handle('api-get-capture-by-id', async (event, captureId) => {
+  try {
+    console.log(`📥 [IPC] Fetching full capture: ${captureId}`);
+    const result = await CloudRunClient.getCaptureById(captureId);
+    return result;
+  } catch (error) {
+    console.error('❌ [IPC] Failed to get capture:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+// Proactive notification system
+let notificationInterval = null;
+
+function startProactiveNotifications() {
+  console.log('🔔 Starting proactive notification system...');
+  
+  // Check every 30 minutes (1800000 ms)
+  // For testing, use 2 minutes: 2 * 60 * 1000
+  const checkInterval = 1 * 60 * 1000;
+  
+  notificationInterval = setInterval(async () => {
+    try {
+      const isAuth = await TokenManager.isAuthenticated();
+      if (!isAuth) {
+        console.log('⚠️ Not authenticated, skipping proactive check');
+        return;
+      }
+      
+      console.log('🔔 Checking for proactive notifications...');
+      const result = await CloudRunClient.getProactiveNotifications();
+      
+      if (result.notifications && result.notifications.length > 0) {
+        console.log('✅ Found', result.notifications.length, 'proactive notifications');
+        
+        // Show the highest priority notification
+        const topNotif = result.notifications[0];
+        showProactiveNotification(topNotif);
+      } else {
+        console.log('ℹ️ No proactive notifications at this time');
+      }
+      
+    } catch (error) {
+      console.error('❌ Proactive notification check failed:', error);
+    }
+  }, checkInterval);
+  
+  // Also check immediately on startup (after 30 seconds)
+  setTimeout(async () => {
+    try {
+      const isAuth = await TokenManager.isAuthenticated();
+      if (!isAuth) return;
+      
+      const result = await CloudRunClient.getProactiveNotifications();
+      if (result.notifications && result.notifications.length > 0) {
+        showProactiveNotification(result.notifications[0]);
+      }
+    } catch (error) {
+      console.error('❌ Initial proactive check failed:', error);
+    }
+  }, 30000);
+}
+
+function showProactiveNotification(notification) {
+  console.log('🔔 Showing proactive notification:', notification.title);
+  
+  // Close existing notification if open
+  if (notificationWindow && !notificationWindow.isDestroyed()) {
+    notificationWindow.close();
+  }
+  notificationWindow = null;
+  
+  try {
+    notificationWindow = new BrowserWindow({
+      width: 420,
+      height: 300,
+      frame: false,
+      transparent: true,
+      alwaysOnTop: true,
+      resizable: false,
+      skipTaskbar: true,
+      show: false,
+      webPreferences: {
+        preload: path.join(__dirname, 'preload.js'),
+        contextIsolation: true,
+        nodeIntegration: false,
+        devTools: true
+      }
+    });
+
+    // Bottom-right positioning
+    const display = screen.getPrimaryDisplay();
+    const { x, y, width, height } = display.workArea;
+    const margin = 16;
+    notificationWindow.setPosition(
+      x + width - 420 - margin,
+      y + height - 300 - margin
+    );
+
+    // Load HTML
+    const notificationPath = path.join(__dirname, 'src', 'components', 'ProactiveNotification.html');
+    
+    notificationWindow.loadFile(notificationPath);
+    
+    // Send notification data
+    notificationWindow.webContents.on('did-finish-load', () => {
+      notificationWindow.webContents.send('proactive-notification-data', notification);
+      notificationWindow.show();
+      console.log('✅ Proactive notification shown');
+    });
+
+    notificationWindow.on('closed', () => {
+      console.log('🔔 Proactive notification closed');
+      notificationWindow = null;
+    });
+
+    // Auto-close after 10 seconds
+    setTimeout(() => {
+      if (notificationWindow && !notificationWindow.isDestroyed()) {
+        notificationWindow.close();
+      }
+    }, 10000);
+
+  } catch (err) {
+    console.error('❌ Failed to show proactive notification:', err);
+    if (notificationWindow && !notificationWindow.isDestroyed()) {
+      notificationWindow.close();
+      notificationWindow = null;
+    }
+  }
+}
+
+// In app.whenReady()
 app.whenReady().then(async () => {
   console.log('🚀 LifeOS starting...');
 
-  // IMPORTANT: Initialize electron-store first
-  await initializeStore();
-  console.log('✅ Store initialized');
+  await initializeStores();
 
-  // Create main window
   createMainWindow();
 
-  // Check if user is already authenticated (auto-login)
   const isAuthenticated = await TokenManager.isAuthenticated();
   if (isAuthenticated) {
     console.log('✅ User already authenticated, creating floating button...');
-    store.set('buttonPosition', { x: 300, y: 300 });  // Reset to visible location
+    store.set('buttonPosition', { x: 300, y: 300 });
     createFloatingButton();
+    
+    // START PROACTIVE NOTIFICATIONS
+    startProactiveNotifications();
   }
 
-  // Register keyboard shortcuts
   registerShortcuts();
 
   console.log('✅ LifeOS ready!');
 });
+
+
+// app.whenReady().then(async () => {
+//   console.log('🚀 LifeOS starting...');
+
+//   // Initialize stores FIRST
+//   await initializeStores();
+
+//   // Create main window
+//   createMainWindow();
+
+//   // Check if user is already authenticated (auto-login)
+//   const isAuthenticated = await TokenManager.isAuthenticated();
+//   if (isAuthenticated) {
+//     console.log('✅ User already authenticated, creating floating button...');
+//     store.set('buttonPosition', { x: 300, y: 300 });
+//     createFloatingButton();
+//   }
+
+//   // Register keyboard shortcuts
+//   registerShortcuts();
+
+//   console.log('✅ LifeOS ready!');
+// });
 
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') {

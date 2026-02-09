@@ -17,10 +17,10 @@ class Settings(BaseSettings):
     LOCATION: str = os.getenv("GCP_LOCATION", "us-central1")
     
     # Gemini Model Versions
-    PERCEPTION_MODEL: str = "gemini-3-flash-preview"
-    COGNITION_MODEL: str = "gemini-3-flash-preview"
-    ORCHESTRATOR_MODEL: str = "gemini-3-flash-preview"
-    RESEARCH_MODEL: str = "gemini-3-flash-preview"
+    PERCEPTION_MODEL: str = "gemini-2.5-flash"
+    COGNITION_MODEL: str = "gemini-2.5-flash"
+    ORCHESTRATOR_MODEL: str = "gemini-2.5-flash"
+    RESEARCH_MODEL: str = "gemini-2.5-flash"
     
     # Firestore Collection Names
     COLLECTION_CAPTURES: str = "captures"

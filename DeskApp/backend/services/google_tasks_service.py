@@ -1,6 +1,7 @@
 """
 LifeOS - Google Tasks Integration
 Handles task creation for actionable items without specific times
+ALL TASKS NOW STORE capture_id (not source_capture_id)
 """
 from datetime import datetime
 from typing import Dict, Optional
@@ -20,8 +21,15 @@ class GoogleTasksService:
     def _get_service(self):
         """Lazy load tasks service"""
         if not self.tasks_service:
-            self.tasks_service = self.auth_service.get_tasks_service()
+            import asyncio
+            loop = asyncio.get_event_loop()
+            self.tasks_service = loop.run_until_complete(self.auth_service.get_tasks_service())
         return self.tasks_service
+    
+    async def initialize(self):
+        """Initialize Tasks service - call this before using"""
+        self.tasks_service = await self.auth_service.get_tasks_service()
+        print(f"[TASKS] Service initialized for user {self.user_id}")
     
     def _get_default_tasklist(self):
         """Get the default task list ID"""
@@ -38,7 +46,7 @@ class GoogleTasksService:
         title: str,
         notes: Optional[str] = None,
         due_date: Optional[str] = None,
-        source_capture_id: Optional[str] = None
+        capture_id: Optional[str] = None
     ) -> Dict:
         """Creates a task in Google Tasks and saves to Firestore"""
         
@@ -78,22 +86,21 @@ class GoogleTasksService:
             
             print(f"[TASKS] Created task '{title}' in Google Tasks")
             
-            # Save to Firestore with proper notes field
+            # Save to Firestore with capture_id (unified field name)
             task_data = {
                 "title": title,
-                "notes": notes if notes else "",  # Save notes (not None!)
+                "notes": notes if notes else "",
                 "due_date": due_date,
                 "google_task_id": google_task_id,
                 "google_tasklist_id": tasklist_id,
-                "source_capture_id": source_capture_id,
+                "capture_id": capture_id,  # ✅ Unified field name
                 "created_by_agent": "agent_3_orchestrator",
                 "status": "active",
                 "completed": False,
                 "created_at": datetime.utcnow().isoformat()
             }
             
-            # DEBUG: Show what we're saving
-            print(f"[FIRESTORE] Saving task with notes: '{notes[:100] if notes else '(empty)'}'")
+            print(f"[FIRESTORE] Saving task with capture_id: {capture_id}")
             
             doc_ref = self.db._get_user_ref(self.user_id).collection("google_tasks").document()
             doc_ref.set(task_data)
@@ -104,11 +111,14 @@ class GoogleTasksService:
                 "status": "success",
                 "message": f"Task '{title}' created successfully",
                 "google_task_id": google_task_id,
-                "firestore_id": doc_ref.id
+                "firestore_doc_id": doc_ref.id,
+                "capture_id": capture_id
             }
             
         except Exception as e:
             print(f"[ERROR] Failed to create task: {e}")
+            import traceback
+            traceback.print_exc()
             return {
                 "status": "error",
                 "message": str(e)

@@ -1,6 +1,7 @@
 """
 LifeOS - Orchestrator Tools (Expanded for 3-Layer Classification)
 14 Intents × 12 Domains Support
+ALL TOOLS NOW ACCEPT AND STORE capture_id
 """
 from typing import Dict, List, Optional
 from datetime import datetime
@@ -14,10 +15,16 @@ from services.google_tasks_service import GoogleTasksService
 
 
 # ============================================
-# EXISTING TOOLS (Enhanced)
+# EXISTING TOOLS (Enhanced with capture_id)
 # ============================================
 
-def add_to_shopping_list(user_id: str, item_name: str, price: float = 0.0, domain: str = "shopping_consumption") -> Dict:
+def add_to_shopping_list(
+    user_id: str, 
+    item_name: str, 
+    price: float = 0.0, 
+    domain: str = "shopping_consumption",
+    capture_id: Optional[str] = None
+) -> Dict:
     """
     Intent: buy
     Adds a product to shopping list
@@ -30,6 +37,7 @@ def add_to_shopping_list(user_id: str, item_name: str, price: float = 0.0, domai
             "price": price,
             "status": "pending",
             "domain": domain,
+            "capture_id": capture_id,
             "created_at": datetime.utcnow().isoformat(),
             "source": "agent_orchestrator"
         }
@@ -37,15 +45,20 @@ def add_to_shopping_list(user_id: str, item_name: str, price: float = 0.0, domai
         doc_ref = db._get_user_ref(user_id).collection("shopping_lists").document()
         doc_ref.set(item_data)
         
-        print(f"[TOOL] Added '{item_name}' to shopping list")
-        return {"status": "success", "message": f"Added {item_name} to shopping list", "item_id": doc_ref.id}
+        print(f"[TOOL] Added '{item_name}' to shopping list (capture: {capture_id})")
+        return {
+            "status": "success", 
+            "message": f"Added {item_name} to shopping list", 
+            "firestore_doc_id": doc_ref.id,
+            "capture_id": capture_id
+        }
         
     except Exception as e:
         print(f"[ERROR] add_to_shopping_list failed: {e}")
         return {"status": "error", "message": str(e)}
 
 
-def create_calendar_event(
+async def create_calendar_event(
     user_id: str, 
     event_title: str, 
     start_time: str,
@@ -55,7 +68,8 @@ def create_calendar_event(
     user_timezone: str = "UTC",
     attendees: List[str] = None,
     send_invites: bool = False,
-    domain: str = "work_career"
+    domain: str = "work_career",
+    capture_id: Optional[str] = None
 ) -> Dict:
     """
     Intent: schedule
@@ -63,6 +77,7 @@ def create_calendar_event(
     """
     try:
         calendar_service = GoogleCalendarService(user_id)
+        await calendar_service.initialize()
         
         result = calendar_service.create_event(
             title=event_title,
@@ -72,33 +87,39 @@ def create_calendar_event(
             location=location,
             user_timezone=user_timezone,
             attendees=attendees,
-            send_invites=send_invites
+            send_invites=send_invites,
+            capture_id=capture_id
         )
         
         if result['status'] == 'success':
             attendee_info = f" with {len(attendees)} attendees" if attendees else ""
-            print(f"[TOOL] Created calendar event '{event_title}'{attendee_info}")
+            print(f"[TOOL] Created calendar event '{event_title}'{attendee_info} (capture: {capture_id})")
             return {
                 "status": "success",
                 "message": f"Event '{event_title}' added to Google Calendar",
                 "google_link": result.get('google_link'),
-                "event_id": result.get('firestore_id'),
+                "google_event_id": result.get('google_event_id'),
+                "firestore_doc_id": result.get('firestore_doc_id'),
+                "capture_id": capture_id,
                 "domain": domain
             }
         return result
         
     except Exception as e:
         print(f"[ERROR] create_calendar_event failed: {e}")
+        import traceback
+        traceback.print_exc()
         return {"status": "error", "message": str(e)}
 
 
-def create_task(
+async def create_task(
     user_id: str,
     task_title: str,
     notes: str = None,
     due_date: str = None,
     domain: str = "work_career",
-    priority: int = 3
+    priority: int = 3,
+    capture_id: Optional[str] = None
 ) -> Dict:
     """
     Intent: act
@@ -106,25 +127,31 @@ def create_task(
     """
     try:
         tasks_service = GoogleTasksService(user_id)
+        await tasks_service.initialize()
         
         result = tasks_service.create_task(
             title=task_title,
             notes=notes,
-            due_date=due_date
+            due_date=due_date,
+            capture_id=capture_id
         )
         
         if result['status'] == 'success':
-            print(f"[TOOL] Created task '{task_title}' (domain: {domain})")
+            print(f"[TOOL] Created task '{task_title}' (domain: {domain}, capture: {capture_id})")
             return {
                 "status": "success",
                 "message": f"Task '{task_title}' added to Google Tasks",
-                "task_id": result.get('firestore_id'),
+                "google_task_id": result.get('google_task_id'),
+                "firestore_doc_id": result.get('firestore_doc_id'),
+                "capture_id": capture_id,
                 "domain": domain
             }
         return result
         
     except Exception as e:
         print(f"[ERROR] create_task failed: {e}")
+        import traceback
+        traceback.print_exc()
         return {"status": "error", "message": str(e)}
 
 
@@ -133,7 +160,8 @@ def create_note(
     title: str, 
     content: str, 
     domain: str = "ideas_thoughts",
-    tags: List[str] = None
+    tags: List[str] = None,
+    capture_id: Optional[str] = None
 ) -> Dict:
     """
     Intent: remember, reference, archive
@@ -147,6 +175,7 @@ def create_note(
             "content": content,
             "domain": domain,
             "tags": tags or [],
+            "capture_id": capture_id,
             "created_at": datetime.utcnow().isoformat(),
             "source": "agent_orchestrator"
         }
@@ -154,8 +183,13 @@ def create_note(
         doc_ref = db._get_user_ref(user_id).collection("notes").document()
         doc_ref.set(note_data)
         
-        print(f"[TOOL] Created note '{title}' (domain: {domain})")
-        return {"status": "success", "message": f"Note '{title}' created", "note_id": doc_ref.id}
+        print(f"[TOOL] Created note '{title}' (domain: {domain}, capture: {capture_id})")
+        return {
+            "status": "success", 
+            "message": f"Note '{title}' created", 
+            "firestore_doc_id": doc_ref.id,
+            "capture_id": capture_id
+        }
         
     except Exception as e:
         print(f"[ERROR] create_note failed: {e}")
@@ -163,7 +197,7 @@ def create_note(
 
 
 # ============================================
-# NEW TOOLS FOR 3-LAYER SYSTEM
+# NEW TOOLS FOR 3-LAYER SYSTEM (All with capture_id)
 # ============================================
 
 def add_to_bills(
@@ -172,7 +206,8 @@ def add_to_bills(
     amount: float = 0.0,
     due_date: str = None,
     category: str = "utilities",
-    recurring: bool = False
+    recurring: bool = False,
+    capture_id: Optional[str] = None
 ) -> Dict:
     """
     Intent: pay
@@ -190,6 +225,7 @@ def add_to_bills(
             "recurring": recurring,
             "status": "pending",
             "domain": "money_finance",
+            "capture_id": capture_id,
             "created_at": datetime.utcnow().isoformat(),
             "source": "agent_orchestrator"
         }
@@ -197,22 +233,28 @@ def add_to_bills(
         doc_ref = db._get_user_ref(user_id).collection("financial_items").document()
         doc_ref.set(bill_data)
         
-        print(f"[TOOL] Added bill '{bill_name}' (${amount}) to financial tracker")
-        return {"status": "success", "message": f"Bill '{bill_name}' added", "item_id": doc_ref.id}
+        print(f"[TOOL] Added bill '{bill_name}' (${amount}, capture: {capture_id})")
+        return {
+            "status": "success", 
+            "message": f"Bill '{bill_name}' added", 
+            "firestore_doc_id": doc_ref.id,
+            "capture_id": capture_id
+        }
         
     except Exception as e:
         print(f"[ERROR] add_to_bills failed: {e}")
         return {"status": "error", "message": str(e)}
 
 
-def create_health_item(
+async def create_health_item(
     user_id: str,
     title: str,
     item_type: str = "appointment",
     date_time: str = None,
     doctor: str = None,
     notes: str = None,
-    add_to_calendar: bool = True
+    add_to_calendar: bool = True,
+    capture_id: Optional[str] = None
 ) -> Dict:
     """
     Intent: schedule, track, remember
@@ -230,6 +272,7 @@ def create_health_item(
             "notes": notes,
             "status": "scheduled" if item_type == "appointment" else "active",
             "domain": "health_wellbeing",
+            "capture_id": capture_id,
             "created_at": datetime.utcnow().isoformat(),
             "source": "agent_orchestrator"
         }
@@ -239,17 +282,23 @@ def create_health_item(
         
         # Also create calendar event for appointments
         if add_to_calendar and date_time and item_type == "appointment":
-            calendar_result = create_calendar_event(
+            calendar_result = await create_calendar_event(
                 user_id=user_id,
                 event_title=f"Medical: {title}",
                 start_time=date_time,
                 description=f"Doctor: {doctor}\nNotes: {notes}" if doctor else notes,
-                domain="health_wellbeing"
+                domain="health_wellbeing",
+                capture_id=capture_id
             )
             print(f"[TOOL] Also added to calendar: {calendar_result.get('status')}")
         
-        print(f"[TOOL] Created health item '{title}' (type: {item_type})")
-        return {"status": "success", "message": f"Health item '{title}' created", "item_id": doc_ref.id}
+        print(f"[TOOL] Created health item '{title}' (type: {item_type}, capture: {capture_id})")
+        return {
+            "status": "success", 
+            "message": f"Health item '{title}' created", 
+            "firestore_doc_id": doc_ref.id,
+            "capture_id": capture_id
+        }
         
     except Exception as e:
         print(f"[ERROR] create_health_item failed: {e}")
@@ -263,7 +312,8 @@ def create_travel_item(
     date_time: str = None,
     location: str = None,
     confirmation: str = None,
-    notes: str = None
+    notes: str = None,
+    capture_id: Optional[str] = None
 ) -> Dict:
     """
     Intent: remember, schedule
@@ -282,6 +332,7 @@ def create_travel_item(
             "notes": notes,
             "status": "upcoming",
             "domain": "travel_movement",
+            "capture_id": capture_id,
             "created_at": datetime.utcnow().isoformat(),
             "source": "agent_orchestrator"
         }
@@ -289,8 +340,13 @@ def create_travel_item(
         doc_ref = db._get_user_ref(user_id).collection("travel_items").document()
         doc_ref.set(travel_data)
         
-        print(f"[TOOL] Created travel item '{title}' (type: {item_type})")
-        return {"status": "success", "message": f"Travel item '{title}' saved", "item_id": doc_ref.id}
+        print(f"[TOOL] Created travel item '{title}' (type: {item_type}, capture: {capture_id})")
+        return {
+            "status": "success", 
+            "message": f"Travel item '{title}' saved", 
+            "firestore_doc_id": doc_ref.id,
+            "capture_id": capture_id
+        }
         
     except Exception as e:
         print(f"[ERROR] create_travel_item failed: {e}")
@@ -302,7 +358,8 @@ def add_to_watchlist(
     title: str,
     media_type: str = "movie",
     platform: str = None,
-    notes: str = None
+    notes: str = None,
+    capture_id: Optional[str] = None
 ) -> Dict:
     """
     Intent: remember
@@ -319,6 +376,7 @@ def add_to_watchlist(
             "notes": notes,
             "status": "to_watch",
             "domain": "entertainment_leisure",
+            "capture_id": capture_id,
             "created_at": datetime.utcnow().isoformat(),
             "source": "agent_orchestrator"
         }
@@ -326,22 +384,28 @@ def add_to_watchlist(
         doc_ref = db._get_user_ref(user_id).collection("media_items").document()
         doc_ref.set(media_data)
         
-        print(f"[TOOL] Added '{title}' to watchlist ({media_type})")
-        return {"status": "success", "message": f"'{title}' added to watchlist", "item_id": doc_ref.id}
+        print(f"[TOOL] Added '{title}' to watchlist ({media_type}, capture: {capture_id})")
+        return {
+            "status": "success", 
+            "message": f"'{title}' added to watchlist", 
+            "firestore_doc_id": doc_ref.id,
+            "capture_id": capture_id
+        }
         
     except Exception as e:
         print(f"[ERROR] add_to_watchlist failed: {e}")
         return {"status": "error", "message": str(e)}
 
 
-def create_family_event(
+async def create_family_event(
     user_id: str,
     title: str,
     event_type: str = "event",
     date_time: str = None,
     person: str = None,
     notes: str = None,
-    add_to_calendar: bool = True
+    add_to_calendar: bool = True,
+    capture_id: Optional[str] = None
 ) -> Dict:
     """
     Intent: schedule, remember
@@ -359,6 +423,7 @@ def create_family_event(
             "notes": notes,
             "status": "upcoming",
             "domain": "family_relationships",
+            "capture_id": capture_id,
             "created_at": datetime.utcnow().isoformat(),
             "source": "agent_orchestrator"
         }
@@ -368,16 +433,22 @@ def create_family_event(
         
         # Add to calendar
         if add_to_calendar and date_time:
-            calendar_result = create_calendar_event(
+            calendar_result = await create_calendar_event(
                 user_id=user_id,
                 event_title=f"Family: {title}",
                 start_time=date_time,
                 description=f"Person: {person}\n{notes}" if person else notes,
-                domain="family_relationships"
+                domain="family_relationships",
+                capture_id=capture_id
             )
         
-        print(f"[TOOL] Created family event '{title}'")
-        return {"status": "success", "message": f"Family event '{title}' created", "item_id": doc_ref.id}
+        print(f"[TOOL] Created family event '{title}' (capture: {capture_id})")
+        return {
+            "status": "success", 
+            "message": f"Family event '{title}' created", 
+            "firestore_doc_id": doc_ref.id,
+            "capture_id": capture_id
+        }
         
     except Exception as e:
         print(f"[ERROR] create_family_event failed: {e}")
@@ -390,7 +461,8 @@ def create_tracker(
     tracker_type: str = "general",
     current_value: str = None,
     target_value: str = None,
-    domain: str = "ideas_thoughts"
+    domain: str = "ideas_thoughts",
+    capture_id: Optional[str] = None
 ) -> Dict:
     """
     Intent: track
@@ -414,6 +486,7 @@ def create_tracker(
             "target_value": target_value,
             "domain": domain,
             "status": "tracking",
+            "capture_id": capture_id,
             "created_at": datetime.utcnow().isoformat(),
             "source": "agent_orchestrator"
         }
@@ -421,8 +494,13 @@ def create_tracker(
         doc_ref = db._get_user_ref(user_id).collection(collection).document()
         doc_ref.set(tracker_data)
         
-        print(f"[TOOL] Created tracker '{title}' in {collection}")
-        return {"status": "success", "message": f"Tracker '{title}' created", "item_id": doc_ref.id}
+        print(f"[TOOL] Created tracker '{title}' in {collection} (capture: {capture_id})")
+        return {
+            "status": "success", 
+            "message": f"Tracker '{title}' created", 
+            "firestore_doc_id": doc_ref.id,
+            "capture_id": capture_id
+        }
         
     except Exception as e:
         print(f"[ERROR] create_tracker failed: {e}")
@@ -435,7 +513,8 @@ def create_comparison(
     options: List[str] = None,
     criteria: List[str] = None,
     notes: str = None,
-    domain: str = "shopping_consumption"
+    domain: str = "shopping_consumption",
+    capture_id: Optional[str] = None
 ) -> Dict:
     """
     Intent: compare
@@ -452,6 +531,7 @@ def create_comparison(
             "domain": domain,
             "item_type": "comparison",
             "status": "evaluating",
+            "capture_id": capture_id,
             "created_at": datetime.utcnow().isoformat(),
             "source": "agent_orchestrator"
         }
@@ -459,35 +539,42 @@ def create_comparison(
         doc_ref = db._get_user_ref(user_id).collection("notes").document()
         doc_ref.set(comparison_data)
         
-        print(f"[TOOL] Created comparison '{title}'")
-        return {"status": "success", "message": f"Comparison '{title}' created", "item_id": doc_ref.id}
+        print(f"[TOOL] Created comparison '{title}' (capture: {capture_id})")
+        return {
+            "status": "success", 
+            "message": f"Comparison '{title}' created", 
+            "firestore_doc_id": doc_ref.id,
+            "capture_id": capture_id
+        }
         
     except Exception as e:
         print(f"[ERROR] create_comparison failed: {e}")
         return {"status": "error", "message": str(e)}
 
 
-def create_reminder(
+async def create_reminder(
     user_id: str,
     title: str,
     remind_date: str = None,
     notes: str = None,
-    domain: str = "work_career"
+    domain: str = "work_career",
+    capture_id: Optional[str] = None
 ) -> Dict:
     """
     Intent: follow_up
     Creates a follow-up reminder as a Google Task
     """
     try:
-        result = create_task(
+        result = await create_task(
             user_id=user_id,
             task_title=f"Follow up: {title}",
             notes=notes,
             due_date=remind_date,
-            domain=domain
+            domain=domain,
+            capture_id=capture_id
         )
         
-        print(f"[TOOL] Created follow-up reminder '{title}'")
+        print(f"[TOOL] Created follow-up reminder '{title}' (capture: {capture_id})")
         return result
         
     except Exception as e:
@@ -495,13 +582,14 @@ def create_reminder(
         return {"status": "error", "message": str(e)}
 
 
-def create_waiting_item(
+async def create_waiting_item(
     user_id: str,
     title: str,
     waiting_for: str = None,
     expected_date: str = None,
     notes: str = None,
-    domain: str = "work_career"
+    domain: str = "work_career",
+    capture_id: Optional[str] = None
 ) -> Dict:
     """
     Intent: wait
@@ -510,15 +598,16 @@ def create_waiting_item(
     try:
         task_notes = f"Waiting for: {waiting_for}\n{notes}" if waiting_for else notes
         
-        result = create_task(
+        result = await create_task(
             user_id=user_id,
             task_title=f"Waiting: {title}",
             notes=task_notes,
             due_date=expected_date,
-            domain=domain
+            domain=domain,
+            capture_id=capture_id
         )
         
-        print(f"[TOOL] Created waiting item '{title}'")
+        print(f"[TOOL] Created waiting item '{title}' (capture: {capture_id})")
         return result
         
     except Exception as e:
@@ -530,7 +619,8 @@ def archive_item(
     user_id: str,
     title: str,
     content: str,
-    domain: str = "admin_documents"
+    domain: str = "admin_documents",
+    capture_id: Optional[str] = None
 ) -> Dict:
     """
     Intent: archive
@@ -542,10 +632,11 @@ def archive_item(
             title=f"[Archived] {title}",
             content=content,
             domain=domain,
-            tags=["archived", "fyi"]
+            tags=["archived", "fyi"],
+            capture_id=capture_id
         )
         
-        print(f"[TOOL] Archived '{title}'")
+        print(f"[TOOL] Archived '{title}' (capture: {capture_id})")
         return result
         
     except Exception as e:
@@ -553,13 +644,14 @@ def archive_item(
         return {"status": "error", "message": str(e)}
 
 
-def save_document(
+async def save_document(
     user_id: str,
     title: str,
     doc_type: str = "general",
     content: str = None,
     expiry_date: str = None,
-    notes: str = None
+    notes: str = None,
+    capture_id: Optional[str] = None
 ) -> Dict:
     """
     Intent: remember, archive
@@ -577,6 +669,7 @@ def save_document(
             "notes": notes,
             "status": "active",
             "domain": "admin_documents",
+            "capture_id": capture_id,
             "created_at": datetime.utcnow().isoformat(),
             "source": "agent_orchestrator"
         }
@@ -586,29 +679,36 @@ def save_document(
         
         # If has expiry, create reminder
         if expiry_date:
-            create_reminder(
+            await create_reminder(
                 user_id=user_id,
                 title=f"{title} expiring",
                 remind_date=expiry_date,
                 notes=f"Document '{title}' is expiring",
-                domain="admin_documents"
+                domain="admin_documents",
+                capture_id=capture_id
             )
         
-        print(f"[TOOL] Saved document '{title}'")
-        return {"status": "success", "message": f"Document '{title}' saved", "item_id": doc_ref.id}
+        print(f"[TOOL] Saved document '{title}' (capture: {capture_id})")
+        return {
+            "status": "success", 
+            "message": f"Document '{title}' saved", 
+            "firestore_doc_id": doc_ref.id,
+            "capture_id": capture_id
+        }
         
     except Exception as e:
         print(f"[ERROR] save_document failed: {e}")
         return {"status": "error", "message": str(e)}
 
 
-def create_learning_item(
+async def create_learning_item(
     user_id: str,
     title: str,
     item_type: str = "topic",
     content: str = None,
     due_date: str = None,
-    notes: str = None
+    notes: str = None,
+    capture_id: Optional[str] = None
 ) -> Dict:
     """
     Intent: learn, act
@@ -626,6 +726,7 @@ def create_learning_item(
             "notes": notes,
             "status": "active",
             "domain": "education_learning",
+            "capture_id": capture_id,
             "created_at": datetime.utcnow().isoformat(),
             "source": "agent_orchestrator"
         }
@@ -635,16 +736,22 @@ def create_learning_item(
         
         # If it's an assignment with due date, also create task
         if item_type == "assignment" and due_date:
-            create_task(
+            await create_task(
                 user_id=user_id,
                 task_title=title,
                 notes=notes,
                 due_date=due_date,
-                domain="education_learning"
+                domain="education_learning",
+                capture_id=capture_id
             )
         
-        print(f"[TOOL] Created learning item '{title}'")
-        return {"status": "success", "message": f"Learning item '{title}' created", "item_id": doc_ref.id}
+        print(f"[TOOL] Created learning item '{title}' (capture: {capture_id})")
+        return {
+            "status": "success", 
+            "message": f"Learning item '{title}' created", 
+            "firestore_doc_id": doc_ref.id,
+            "capture_id": capture_id
+        }
         
     except Exception as e:
         print(f"[ERROR] create_learning_item failed: {e}")
