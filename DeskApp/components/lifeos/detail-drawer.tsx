@@ -19,6 +19,7 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import rehypeRaw from 'rehype-raw';
 import { Sparkles, Info, Briefcase, CheckSquare } from "lucide-react";
+import { log } from "console";
 
 interface DetailDrawerProps {
   item: CaptureItem | null;
@@ -181,6 +182,7 @@ export function DetailDrawer({ item, isOpen, onClose, onUpdate }: DetailDrawerPr
       setIsLoadingDetails(true);
       getCaptureDetailsV2(item.id)  // CHANGE FROM getCaptureDetails
         .then((details: any) => {
+          console.log("✅ Raw details from API:", item);
           console.log("✅ captureDetails", captureDetails);
           console.log("✅ captureDetails.classification", captureDetails?.classification);
           console.log("✅ captureDetails.research", captureDetails?.research);
@@ -332,12 +334,12 @@ export function DetailDrawer({ item, isOpen, onClose, onUpdate }: DetailDrawerPr
               <div className="flex items-center gap-2 text-xs" style={{ color: 'var(--color-text-secondary)' }}>
                 <span>{new Date(item.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</span>
                 <span>•</span>
-                <span>{item.sourceApp}</span>
+                <span>{item.intent}</span>
               </div>
             </div>
           </div>
 
-          <div className="flex items-center gap-2 flex-shrink-0">
+          {/* <div className="flex items-center gap-2 flex-shrink-0">
             <AskGeminiButton captureId={item.id} variant="button" />
 
             <Button
@@ -348,7 +350,7 @@ export function DetailDrawer({ item, isOpen, onClose, onUpdate }: DetailDrawerPr
             >
               <X className="h-4 w-4" />
             </Button>
-          </div>
+          </div> */}
         </header>
 
         {/* Content - 70/30 Split */}

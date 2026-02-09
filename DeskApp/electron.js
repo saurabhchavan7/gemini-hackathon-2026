@@ -338,6 +338,8 @@ async function createMainWindow() {
     : 'http://localhost:3000/login';
 
   await mainWindow.loadURL(startUrl);
+  // ✅ Open DevTools automatically
+mainWindow.webContents.openDevTools();
 
   // ⭐ ADD THIS: Inject token into web page after load
   if (isAuthenticated) {
@@ -1347,7 +1349,7 @@ function startProactiveNotifications() {
 
   // Check every 30 minutes (1800000 ms)
   // For testing, use 2 minutes: 2 * 60 * 1000
-  const checkInterval = 1 * 60 * 1000;
+  const checkInterval = 10 * 60 * 1000;
 
   notificationInterval = setInterval(async () => {
     try {

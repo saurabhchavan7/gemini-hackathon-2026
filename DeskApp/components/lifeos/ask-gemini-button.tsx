@@ -103,7 +103,7 @@ export function AskGeminiButton({ captureId, variant = "button" }: AskGeminiButt
               <div className="flex items-center justify-between p-4 border-b" style={{ borderColor: 'var(--color-border-light)' }}>
                 <div className="flex items-center gap-2">
                   <div className="h-8 w-8 rounded-lg flex items-center justify-center" style={{ backgroundColor: 'var(--color-accent-blue-light)' }}>
-                    <Sparkles className="h-4 w-4" style={{ color: 'var(--color-accent-blue)' }} />
+                    <Sparkles className="h-5 w-5" style={{ color: 'var(--color-accent-blue)' }} />
                   </div>
                   <h3 className="font-semibold text-base" style={{ color: 'var(--color-text-primary)' }}>Ask Gemini 3</h3>
                 </div>
