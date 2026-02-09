@@ -1,6 +1,6 @@
 "use client";
 
-import { Info, Eye, Brain, Search, Zap, CheckCircle } from "lucide-react";
+import { Info, Eye, Brain, Search, Zap, CheckCircle, BookOpen } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Popover,
@@ -11,57 +11,34 @@ import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 
 interface GeminiProcessingInfoProps {
-  captureData: {
-    input?: {
-      screenshot_url?: string;
-      audio_url?: string;
-      text_note?: string;
-    };
-    classification?: {
-      domain?: string;
-      intent?: string;
-      domain_confidence?: number;
-      processing_time_ms?: number;
-    };
-    research?: {
-      triggered?: boolean;
-      sources_count?: number;
-      processing_time_ms?: number;
-    };
-    resources?: {
-      triggered?: boolean;
-      resources_count?: number;
-      processing_time_ms?: number;
-    };
-    execution?: {
-      total_actions?: number;
-      successful?: number;
-      processing_time_ms?: number;
-    };
-    proactive?: {
-      triggered?: boolean;
-      processing_time_ms?: number;
-    };
-  };
+  captureData: any;
 }
 
 export function GeminiProcessingInfo({ captureData }: GeminiProcessingInfoProps) {
-  const hasScreenshot = !!captureData.input?.screenshot_url;
-  const hasAudio = !!captureData.input?.audio_url;
+  const hasScreenshot = !!captureData.input?.screenshot_path || !!captureData.input?.screenshot_url;
+  const hasAudio = !!captureData.input?.audio_path || !!captureData.input?.audio_url;
   const hasText = !!captureData.input?.text_note;
-  
+  const hasOCR = !!captureData.perception?.ocr_text;
+  const hasTranscript = !!captureData.perception?.audio_transcript;
+
   const stages = [
     {
       icon: Eye,
       label: "Perception",
-      description: hasScreenshot ? "Vision model extracted text from screenshot" : hasAudio ? "Audio model transcribed voice recording" : "Text analysis",
-      active: hasScreenshot || hasAudio || hasText,
-      time: null,
+      description: hasOCR 
+        ? "Vision model extracted text from screenshot" 
+        : hasTranscript 
+          ? "Audio model transcribed voice recording" 
+          : hasText
+            ? "Text analysis"
+            : "Multi-modal input processed",
+      active: hasScreenshot || hasAudio || hasText || hasOCR || hasTranscript,
+      time: captureData.perception?.processing_time_ms,
     },
     {
       icon: Brain,
       label: "Classification",
-      description: `Identified as ${captureData.classification?.domain || 'unknown'} domain with ${captureData.classification?.intent || 'unknown'} intent`,
+      description: `Identified as ${captureData.classification?.domain?.replace(/_/g, ' ') || 'unknown'} domain with ${captureData.classification?.primary_intent || captureData.classification?.intent || 'unknown'} intent`,
       active: !!captureData.classification,
       time: captureData.classification?.processing_time_ms,
       confidence: captureData.classification?.domain_confidence,
@@ -69,11 +46,20 @@ export function GeminiProcessingInfo({ captureData }: GeminiProcessingInfoProps)
     {
       icon: Search,
       label: "Research",
-      description: captureData.research?.triggered 
+      description: captureData.research?.has_data 
         ? `Grounded search found ${captureData.research.sources_count || 0} sources`
         : "Not triggered for this capture",
-      active: captureData.research?.triggered || false,
+      active: captureData.research?.has_data || false,
       time: captureData.research?.processing_time_ms,
+    },
+    {
+      icon: BookOpen,
+      label: "Resources",
+      description: captureData.resources?.has_data
+        ? `Found ${captureData.resources.resources_count || 0} learning resources`
+        : "Not triggered for this capture",
+      active: captureData.resources?.has_data || false,
+      time: captureData.resources?.processing_time_ms,
     },
     {
       icon: Zap,
@@ -92,20 +78,39 @@ export function GeminiProcessingInfo({ captureData }: GeminiProcessingInfoProps)
         <Button
           variant="ghost"
           size="sm"
-          className="h-7 gap-1.5 text-xs backdrop-blur-sm bg-background/50 border border-border/50 hover:bg-background/80 transition-all"
+          className="h-7 gap-1.5 text-xs border transition-all"
+          style={{
+            backgroundColor: 'var(--color-accent-blue-light)',
+            borderColor: 'var(--color-accent-blue)',
+            color: 'var(--color-accent-blue)'
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.transform = 'scale(1.08)';
+            e.currentTarget.style.boxShadow = '0 4px 12px rgba(26, 115, 232, 0.2)';
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.transform = 'scale(1)';
+            e.currentTarget.style.boxShadow = 'none';
+          }}
         >
           <Info className="h-3.5 w-3.5" />
-          <span>Powered by Gemini 3</span>
+          <span className="font-medium">Powered by Gemini 3</span>
         </Button>
       </PopoverTrigger>
       <PopoverContent 
-        className="w-96 backdrop-blur-xl bg-background/95 border-border/50" 
+        className="w-96 backdrop-blur-xl border rounded-xl"
+        style={{
+          backgroundColor: 'var(--color-bg-card)',
+          borderColor: 'var(--color-border-light)'
+        }}
         align="start"
       >
         <div className="space-y-4">
           <div>
-            <h4 className="font-semibold text-sm mb-1">AI Processing Pipeline</h4>
-            <p className="text-xs text-muted-foreground">
+            <h4 className="font-semibold text-sm mb-1" style={{ color: 'var(--color-text-primary)' }}>
+              AI Processing Pipeline
+            </h4>
+            <p className="text-xs" style={{ color: 'var(--color-text-secondary)' }}>
               Multi-agent orchestration powered by Google Gemini 3
             </p>
           </div>
@@ -115,42 +120,64 @@ export function GeminiProcessingInfo({ captureData }: GeminiProcessingInfoProps)
               <div 
                 key={idx}
                 className={cn(
-                  "flex items-start gap-3 p-2.5 rounded-lg transition-all",
+                  "flex items-start gap-3 p-2.5 rounded-lg transition-all border",
                   stage.active 
-                    ? "bg-accent/10 border border-accent/20" 
+                    ? "" 
                     : "opacity-40"
                 )}
+                style={{
+                  backgroundColor: stage.active ? 'var(--color-accent-blue-light)' : 'var(--color-bg-secondary)',
+                  borderColor: stage.active ? 'var(--color-accent-blue)' : 'var(--color-border-light)'
+                }}
               >
-                <div className={cn(
-                  "p-1.5 rounded-md",
-                  stage.active ? "bg-accent/20" : "bg-muted"
-                )}>
-                  <stage.icon className={cn(
-                    "h-3.5 w-3.5",
-                    stage.active ? "text-accent" : "text-muted-foreground"
-                  )} />
+                <div 
+                  className="p-1.5 rounded-md"
+                  style={{
+                    backgroundColor: stage.active ? 'rgba(26, 115, 232, 0.2)' : 'var(--color-bg-tertiary)'
+                  }}
+                >
+                  <stage.icon 
+                    className="h-3.5 w-3.5"
+                    style={{ 
+                      color: stage.active ? 'var(--color-accent-blue)' : 'var(--color-text-muted)' 
+                    }}
+                  />
                 </div>
                 
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 mb-0.5">
-                    <span className="text-xs font-medium">{stage.label}</span>
+                    <span className="text-xs font-medium" style={{ color: 'var(--color-text-primary)' }}>
+                      {stage.label}
+                    </span>
                     {stage.active && (
-                      <CheckCircle className="h-3 w-3 text-green-500" />
+                      <CheckCircle className="h-3 w-3" style={{ color: 'var(--color-accent-green)' }} />
                     )}
                   </div>
-                  <p className="text-xs text-muted-foreground leading-relaxed">
+                  <p className="text-xs leading-relaxed" style={{ color: 'var(--color-text-secondary)' }}>
                     {stage.description}
                   </p>
                   
-                  {stage.active && (
+                  {stage.active && (stage.time || stage.confidence) && (
                     <div className="flex items-center gap-2 mt-1.5">
-                      {stage.time && (
-                        <Badge variant="outline" className="text-[10px] h-4 px-1.5">
+                      {stage.time !== null && stage.time !== undefined && stage.time > 0 && (
+                        <Badge 
+                          className="text-[10px] h-4 px-1.5 border-0"
+                          style={{
+                            backgroundColor: 'var(--color-bg-tertiary)',
+                            color: 'var(--color-text-secondary)'
+                          }}
+                        >
                           {stage.time}ms
                         </Badge>
                       )}
                       {stage.confidence && (
-                        <Badge variant="outline" className="text-[10px] h-4 px-1.5">
+                        <Badge 
+                          className="text-[10px] h-4 px-1.5 border-0"
+                          style={{
+                            backgroundColor: 'var(--color-accent-green-light)',
+                            color: 'var(--color-accent-green)'
+                          }}
+                        >
                           {Math.round(stage.confidence * 100)}% confidence
                         </Badge>
                       )}
@@ -161,18 +188,18 @@ export function GeminiProcessingInfo({ captureData }: GeminiProcessingInfoProps)
             ))}
           </div>
 
-          <div className="pt-3 border-t border-border/50">
-            <div className="text-[10px] text-muted-foreground space-y-1">
+          <div className="pt-3 border-t" style={{ borderColor: 'var(--color-border-light)' }}>
+            <div className="text-[10px] space-y-1" style={{ color: 'var(--color-text-muted)' }}>
               <div className="flex items-center gap-1.5">
-                <div className="w-1 h-1 rounded-full bg-accent" />
+                <div className="w-1 h-1 rounded-full" style={{ backgroundColor: 'var(--color-accent-blue)' }} />
                 <span>1M token context window</span>
               </div>
               <div className="flex items-center gap-1.5">
-                <div className="w-1 h-1 rounded-full bg-accent" />
+                <div className="w-1 h-1 rounded-full" style={{ backgroundColor: 'var(--color-accent-blue)' }} />
                 <span>Multimodal understanding (vision + audio + text)</span>
               </div>
               <div className="flex items-center gap-1.5">
-                <div className="w-1 h-1 rounded-full bg-accent" />
+                <div className="w-1 h-1 rounded-full" style={{ backgroundColor: 'var(--color-accent-blue)' }} />
                 <span>Function calling for structured outputs</span>
               </div>
             </div>
