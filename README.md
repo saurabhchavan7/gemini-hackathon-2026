@@ -1,10 +1,10 @@
-# Mnemos — Memory Meets Intelligence
+# Mnemos - Memory Meets Intelligence
 
 **Hackathon Date:** 8 February 2026  
 **Team Mnemos:** Sapna Chavan · Saurabh Chavan · Rohit Kosamkar
 
 ## Problem Statement
-Modern knowledge work is defined by fragmented digital inputs—screenshots, links, emails, PDFs, and voice notes—captured with good intent but rarely revisited. The result is:
+Modern knowledge work is defined by fragmented digital inputs screenshots, links, emails, PDFs, and voice notes captured with good intent but rarely revisited. The result is:
 
 - **Information overload** across tools not designed to work together.
 - **Lost intent** (“I’ll do this later”) due to context switching.
@@ -15,7 +15,7 @@ Mnemos addresses this gap by turning fleeting captures into **structured, action
 ## Solution Overview
 Mnemos is a desktop “second brain” that captures information at the moment it appears, understands its **context and intent**, and **proactively executes actions** so users don’t have to.
 
-With a single shortcut (Ctrl + Shift + L) or widget, users capture screenshots, audio, text, or files. Gemini 3 intelligence analyzes the capture, classifies it into life domains, extracts action items, and routes it through a multi‑agent system for research, reminders, and tool integrations (Calendar, Tasks, Gmail). Users return later to a curated, context‑aware knowledge base ready for action.
+With a single shortcut widget, users capture screenshots, audio, text, or files. Gemini 3 intelligence analyzes the capture, classifies it into life domains, extracts action items, and routes it through a multi‑agent system for research, reminders, and tool integrations (Calendar, Tasks, Gmail). Users return later to a curated, context‑aware knowledge base ready for action.
 
 ---
 
