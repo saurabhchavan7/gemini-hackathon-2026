@@ -1305,7 +1305,7 @@ function startProactiveNotifications() {
   
   // Check every 30 minutes (1800000 ms)
   // For testing, use 2 minutes: 2 * 60 * 1000
-  const checkInterval = 1 * 60 * 1000;
+  const checkInterval = 30 * 60 * 1000;
   
   notificationInterval = setInterval(async () => {
     try {
