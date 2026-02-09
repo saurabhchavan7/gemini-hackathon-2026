@@ -298,7 +298,10 @@ let mainWindow = null;
 let floatingButton = null;
 
 const BACKEND_URL = process.env.BACKEND_URL || 'http://127.0.0.1:8000';
+const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:3000';
+
 console.log('🌐 [ELECTRON] Backend URL:', BACKEND_URL);
+console.log('🌐 [ELECTRON] Frontend URL:', FRONTEND_URL);
 
 // Ensure captures directory exists
 const capturesDir = path.join(__dirname, 'captures', 'screenshots');
@@ -312,7 +315,7 @@ async function createMainWindow() {
     icon: resolvePublicAsset(LOGO_PUBLIC_PATH),
     width: 1200,
     height: 800,
-      autoHideMenuBar: true,
+    autoHideMenuBar: true,
 
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
@@ -323,13 +326,14 @@ async function createMainWindow() {
 
   const isAuthenticated = await TokenManager.isAuthenticated();
 
+
   const startUrl = isAuthenticated
-    ? 'http://localhost:3000/inbox'
-    : 'http://localhost:3000/login';
+    ? `${FRONTEND_URL}/inbox`
+    : `${FRONTEND_URL}/login`;
 
   await mainWindow.loadURL(startUrl);
-  // ✅ Open DevTools automatically
-mainWindow.webContents.openDevTools();
+  // Open DevTools automatically
+  //mainWindow.webContents.openDevTools();
 
   // ⭐ ADD THIS: Inject token into web page after load
   if (isAuthenticated) {
@@ -451,7 +455,7 @@ function createFloatingButton() {
     skipTaskbar: true,
     focusable: false,
     show: true,  // ⭐ Try with this first
-      autoHideMenuBar: true,
+    autoHideMenuBar: true,
 
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
@@ -855,7 +859,7 @@ ipcMain.handle('google-login', async (event) => {
       `);
 
       // Redirect to inbox
-      await mainWindow.loadURL('http://localhost:3000/inbox');
+      await mainWindow.loadURL(`${FRONTEND_URL}/inbox`);
       console.log('✅ Redirected to inbox');
     }
 
@@ -1098,7 +1102,7 @@ ipcMain.handle('open-text-note-window', async () => {
       alwaysOnTop: true,
       resizable: false,
       skipTaskbar: true,
-        autoHideMenuBar: true,
+      autoHideMenuBar: true,
 
       webPreferences: {
         preload: path.join(__dirname, 'preload.js'),
@@ -1188,7 +1192,7 @@ ipcMain.handle('open-audio-note-window', async () => {
       alwaysOnTop: true,
       resizable: false,
       skipTaskbar: true,
-        autoHideMenuBar: true,
+      autoHideMenuBar: true,
 
       webPreferences: {
         preload: path.join(__dirname, 'preload.js'),
@@ -1403,7 +1407,7 @@ function showProactiveNotification(notification) {
       resizable: false,
       skipTaskbar: true,
       show: false,
-        autoHideMenuBar: true,
+      autoHideMenuBar: true,
 
       webPreferences: {
         preload: path.join(__dirname, 'preload.js'),

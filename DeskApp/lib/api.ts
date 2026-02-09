@@ -386,7 +386,7 @@ export async function listCaptures(): Promise<CaptureItem[]> {
     
     if (typeof window !== 'undefined') {
       try {
-        const result = await getInbox({ limit: 50 });
+        const result = await getInbox({ limit: 100 });
         console.log(`✅ [API] Got ${result.items.length} items from backend`);
         return result.items.map(mapMemoryToCaptureItem);
       } catch (error) {

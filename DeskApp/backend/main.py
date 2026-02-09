@@ -841,7 +841,7 @@ def get_item(item_id: str):
 
 @app.get("/api/inbox")
 async def get_inbox(
-    limit: int = 50,
+    limit: int = 100,
     filter_intent: str = Query(None),
     filter_domain: str = Query(None),
     authorization: str = Header(None)
@@ -1980,7 +1980,7 @@ async def get_email_drafts(
 
 @app.get("/api/financial")
 async def get_financial_items(
-    limit: int = 50,
+    limit: int = 100,
     status: str = Query(None),
     category: str = Query(None),
     authorization: str = Header(None)
@@ -2056,7 +2056,7 @@ async def mark_bill_paid(
 
 @app.get("/api/health")
 async def get_health_items(
-    limit: int = 50,
+    limit: int = 100,
     item_type: str = Query(None),
     status: str = Query(None),
     authorization: str = Header(None)
@@ -2132,7 +2132,7 @@ async def mark_health_item_complete(
 
 @app.get("/api/travel")
 async def get_travel_items(
-    limit: int = 50,
+    limit: int = 100,
     item_type: str = Query(None),
     status: str = Query("upcoming"),
     authorization: str = Header(None)
@@ -2212,7 +2212,7 @@ async def get_travel_item(
 
 @app.get("/api/family")
 async def get_family_items(
-    limit: int = 50,
+    limit: int = 100,
     event_type: str = Query(None),
     authorization: str = Header(None)
 ):
@@ -2289,7 +2289,7 @@ async def get_family_item(
 
 @app.get("/api/watchlist")
 async def get_watchlist(
-    limit: int = 50,
+    limit: int = 100,
     media_type: str = Query(None),
     status: str = Query("to_watch"),
     authorization: str = Header(None)
@@ -2365,7 +2365,7 @@ async def mark_as_watched(
 
 @app.get("/api/learning")
 async def get_learning_items(
-    limit: int = 50,
+    limit: int = 100,
     item_type: str = Query(None),
     status: str = Query("active"),
     authorization: str = Header(None)
@@ -2441,7 +2441,7 @@ async def mark_learning_complete(
 
 @app.get("/api/documents")
 async def get_document_items(
-    limit: int = 50,
+    limit: int = 100,
     doc_type: str = Query(None),
     authorization: str = Header(None)
 ):
@@ -2519,7 +2519,7 @@ async def get_document_item(
 @app.get("/api/domain/{domain}")
 async def get_items_by_domain(
     domain: str,
-    limit: int = 50,
+    limit: int = 100,
     authorization: str = Header(None)
 ):
     """Generic endpoint to get items from any domain collection"""
@@ -2556,7 +2556,7 @@ async def get_items_by_domain(
 @app.get("/api/memories/domain/{domain}")
 async def get_memories_by_domain(
     domain: str,
-    limit: int = 50,
+    limit: int = 100,
     authorization: str = Header(None)
 ):
     """Get memories filtered by domain"""
@@ -2636,7 +2636,7 @@ async def get_dashboard_recent(
 
 @app.get("/api/home")
 async def get_home_items(
-    limit: int = 50,
+    limit: int = 100,
     item_type: str = Query(None),
     authorization: str = Header(None)
 ):
@@ -2679,7 +2679,7 @@ async def get_home_items(
 
 @app.get("/api/social")
 async def get_social_items(
-    limit: int = 50,
+    limit: int = 100,
     authorization: str = Header(None)
 ):
     """Get user's social items (posts, discussions, news)"""
@@ -2722,7 +2722,7 @@ async def get_social_items(
 
 @app.get("/api/notes")
 async def get_notes(
-    limit: int = 50,
+    limit: int = 100,
     domain: str = Query(None),
     authorization: str = Header(None)
 ):
