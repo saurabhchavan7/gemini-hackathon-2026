@@ -54,8 +54,8 @@ async function startOAuthFlow() {
           res.end(`
             <html>
               <body style="font-family: Arial; text-align: center; padding: 50px;">
-                <h1>✅ Authentication Successful!</h1>
-                <p>You can close this window and return to LifeOS.</p>
+                <h1>Authentication Successful!</h1>
+                <p>You can close this window and return to Mnemos App.</p>
                 <script>window.close();</script>
               </body>
             </html>

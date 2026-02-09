@@ -10,26 +10,14 @@ const _geist = Geist({ subsets: ["latin"] });
 const _geistMono = Geist_Mono({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: 'LifeOS - Capture, Organize, Synthesize',
+  title: 'Mnemos - Memory Meets Intelligence',
   description: 'Your personal knowledge operating system. Capture anything, organize automatically, and surface insights when you need them.',
   generator: 'v0.app',
   icons: {
-    icon: [
-      {
-        url: '/icon-light-32x32.png',
-        media: '(prefers-color-scheme: light)',
-      },
-      {
-        url: '/icon-dark-32x32.png',
-        media: '(prefers-color-scheme: dark)',
-      },
-      {
-        url: '/icon.svg',
-        type: 'image/svg+xml',
-      },
-    ],
-    apple: '/apple-icon.png',
-  },
+  icon:
+    process.env.NEXT_PUBLIC_APP_LOGO_PUBLIC_PATH ||
+    "/logo.png",
+},
 }
 
 export const viewport: Viewport = {

@@ -12,6 +12,7 @@ import {
   Bell,
   Settings,
 } from "lucide-react";
+import Image from "next/image";
 
 const navItems = [
   { href: "/inbox", label: "Inbox", icon: Inbox },
@@ -25,13 +26,21 @@ const navItems = [
 
 export function Sidebar() {
   const pathname = usePathname();
+ 
 
   return (
-    <aside className="flex h-full w-[72px] flex-col items-center border-r py-4" style={{ backgroundColor: 'var(--color-bg-primary)', borderColor: 'var(--color-border-light)' }}>
+    <aside className="flex h-full w-[90px] flex-col items-center border-r py-4">
       {/* Logo */}
       <div className="mb-6">
-        <div className="flex h-10 w-10 items-center justify-center rounded-full" style={{ background: 'linear-gradient(135deg, var(--color-accent-blue) 0%, var(--color-accent-orange) 100%)' }}>
-          <span className="text-lg font-bold text-white">L</span>
+        <div className="relative h-14 w-14 overflow-hidden rounded-full">
+          <Image
+            src="/logoInCircle.png"
+            alt="Mnemos"
+            fill
+            sizes="54px"
+            className="object-contain"
+
+          />
         </div>
       </div>
 
@@ -41,23 +50,23 @@ export function Sidebar() {
           const isActive = pathname === item.href || pathname.startsWith(`${item.href}/`);
           return (
             <Link
-  key={item.href}
-  href={item.href}
-  className="flex h-12 w-12 items-center justify-center rounded-xl transition-all duration-200 hover:scale-105"
-  style={{
-    backgroundColor: isActive ? 'var(--color-accent-blue-light)' : 'transparent',
-    color: isActive ? 'var(--color-accent-blue)' : 'var(--color-text-secondary)',
-  }}
-  onMouseEnter={(e) => {
-    if (!isActive) {
-      e.currentTarget.style.backgroundColor = 'var(--color-bg-tertiary)';
-    }
-  }}
-  onMouseLeave={(e) => {
-    if (!isActive) {
-      e.currentTarget.style.backgroundColor = 'transparent';
-    }
-  }}
+              key={item.href}
+              href={item.href}
+              className="flex h-12 w-12 items-center justify-center rounded-xl transition-all duration-200 hover:scale-105"
+              style={{
+                backgroundColor: isActive ? 'var(--color-accent-blue-light)' : 'transparent',
+                color: isActive ? 'var(--color-accent-blue)' : 'var(--color-text-secondary)',
+              }}
+              onMouseEnter={(e) => {
+                if (!isActive) {
+                  e.currentTarget.style.backgroundColor = 'var(--color-bg-tertiary)';
+                }
+              }}
+              onMouseLeave={(e) => {
+                if (!isActive) {
+                  e.currentTarget.style.backgroundColor = 'transparent';
+                }
+              }}
               title={item.label}
               aria-label={item.label}
               aria-current={isActive ? "page" : undefined}
