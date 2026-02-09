@@ -174,7 +174,7 @@ def create_note(
             "title": title,
             "content": content,
             "domain": domain,
-            "tags": tags or [],
+            "tags": tags or ["Note", "Ideas", "Thoughts"],
             "capture_id": capture_id,
             "created_at": datetime.utcnow().isoformat(),
             "source": "agent_orchestrator"

@@ -18,7 +18,7 @@ class PerceptionResult(BaseModel):
 class PerceptionAgent(AgentBase):
     def __init__(self):
         system_instruction = (
-            "You are the Perception Engine for LifeOS. Your task is to extract all visible text "
+            "You are the Perception Engine for LifeOS. Your task is to extract all visible text, if it's a web browser you can ignore the bookmarks as it is not necessary. "
             "from screenshots (OCR) and transcribe any provided audio. "
             "Be extremely precise. If you see code, transcribe it exactly. "
             "If you see a UI, describe the active elements. "

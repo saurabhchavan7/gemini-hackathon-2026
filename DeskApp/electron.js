@@ -1346,7 +1346,7 @@ function startProactiveNotifications() {
     } catch (error) {
       console.error('❌ Initial proactive check failed:', error);
     }
-  }, 30000);
+  }, 300000);
 }
 
 function showProactiveNotification(notification) {

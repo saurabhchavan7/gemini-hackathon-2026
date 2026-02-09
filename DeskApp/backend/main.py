@@ -3032,7 +3032,7 @@ async def ask_question(
         result = rag_service.answer_question(
             query=question,
             user_id=user_id,
-            num_results=5,
+            num_results=10,
             filter_domain=filter_domain
         )
         
