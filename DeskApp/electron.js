@@ -107,10 +107,15 @@ ipcMain.handle('show-capture-notification', async (event, data) => {
   notificationWindow = null;
 
   try {
+    // Notification window size
+    const notifWidth = 520;
+    const notifHeight = 420;
+    const margin = 10;
+
     notificationWindow = new BrowserWindow({
       icon: resolvePublicAsset(LOGO_PUBLIC_PATH),
-      width: 380,
-      height: 240,
+      width: notifWidth,
+      height: notifHeight,
       frame: false,
       transparent: true,
       alwaysOnTop: true,
@@ -118,7 +123,6 @@ ipcMain.handle('show-capture-notification', async (event, data) => {
       skipTaskbar: true,
       show: false,
       autoHideMenuBar: true,
-
       webPreferences: {
         preload: path.join(__dirname, 'preload.js'),
         contextIsolation: true,
@@ -127,13 +131,19 @@ ipcMain.handle('show-capture-notification', async (event, data) => {
       }
     });
 
+    // Always on top at highest level
+    notificationWindow.setAlwaysOnTop(true, 'screen-saver');
+    notificationWindow.setVisibleOnAllWorkspaces(true);
+
     const display = screen.getPrimaryDisplay();
     const { x, y, width, height } = display.workArea;
-    const margin = 20;
-    notificationWindow.setPosition(
-      x + width - 380 - margin,
-      y + height - 240 - margin
-    );
+
+    // Position in the bottom-right corner with minimal margin
+    let posX = x + width - notifWidth - margin;
+    let posY = y + height - notifHeight - margin;
+    if (posX < x + margin) posX = x + margin;
+    if (posY < y + margin) posY = y + margin;
+    notificationWindow.setPosition(posX, posY);
 
     const notificationPath = path.join(__dirname, 'src', 'components', 'CaptureNotification.html');
     console.log('📄 Loading notification from:', notificationPath);
@@ -1384,7 +1394,7 @@ function startProactiveNotifications() {
     } catch (error) {
       console.error('❌ Initial proactive check failed:', error);
     }
-  }, 30000);
+  }, 300000);
 }
 
 function showProactiveNotification(notification) {

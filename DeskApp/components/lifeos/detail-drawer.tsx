@@ -339,8 +339,7 @@ export function DetailDrawer({ item, isOpen, onClose, onUpdate }: DetailDrawerPr
             </div>
           </div>
 
-          {/* <div className="flex items-center gap-2 flex-shrink-0">
-            <AskGeminiButton captureId={item.id} variant="button" />
+          <div className="flex items-center gap-2 flex-shrink-0">
 
             <Button
               variant="ghost"
@@ -350,7 +349,7 @@ export function DetailDrawer({ item, isOpen, onClose, onUpdate }: DetailDrawerPr
             >
               <X className="h-4 w-4" />
             </Button>
-          </div> */}
+          </div>
         </header>
 
         {/* Content - 70/30 Split */}

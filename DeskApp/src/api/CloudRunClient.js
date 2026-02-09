@@ -27,7 +27,7 @@ console.log('🌐 [CloudRunClient] Using backend:', BASE_URL);
  */
 const apiClient = axios.create({
   baseURL: BASE_URL,
-  timeout: 30000, // 30 second timeout
+  timeout: 60000, // 60 second timeout
   headers: {
     'Content-Type': 'application/json',
   }

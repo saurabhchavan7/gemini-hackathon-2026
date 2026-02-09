@@ -12,10 +12,10 @@
         }
 
         body {
-            width: 450px;
-            height: auto;
+            width: 320px;
+            height: 340px;
             margin: 0;
-            padding: 16px;
+            padding: 8px;
             background: transparent;
             overflow: hidden;
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
@@ -26,9 +26,9 @@
             background: rgba(255, 255, 255, 0.9);
             backdrop-filter: blur(40px) saturate(180%);
             border: 0.5px solid rgba(255, 255, 255, 0.18);
-            border-radius: 20px;
+            border-radius: 16px;
             box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12);
-            padding: 20px;
+            padding: 12px;
             animation: slideIn 300ms cubic-bezier(0.34, 1.56, 0.64, 1);
         }
 
@@ -76,18 +76,18 @@
             display: flex;
             flex-direction: column;
             align-items: center;
-            padding: 30px 20px;
-            margin-bottom: 16px;
+            padding: 16px 8px;
+            margin-bottom: 8px;
         }
 
         .record-button {
             width: 80px;
             height: 80px;
             border-radius: 50%;
-            border: none;
+            border: 3px solid #007aff;
+            background: #fff;
             cursor: pointer;
             position: relative;
-            background: rgba(0, 122, 255, 0.9);
             box-shadow: 0 4px 16px rgba(0, 122, 255, 0.3);
             transition: all 0.3s;
             margin-bottom: 20px;
@@ -99,7 +99,8 @@
         }
 
         .record-button.recording {
-            background: #f44336;
+            background: #fff;
+            border-color: #f44336;
             animation: pulse 1.5s ease-in-out infinite;
         }
 
@@ -151,6 +152,12 @@
             background: rgba(0, 122, 255, 0.6);
             border-radius: 2px;
             transition: height 0.1s;
+            transition: height 0.1s, background 0.2s;
+        
+            }
+        
+            .waveform.recording .wave-bar {
+                background: rgba(244, 67, 54, 0.7);
         }
 
         .actions {
@@ -212,13 +219,15 @@
             <button class="close-btn" id="closeBtn">×</button>
         </div>
 
-        <div class="context-info" id="contextInfo">
+        <!-- <div class="context-info" id="contextInfo">
             Capturing from: <strong id="appName">Unknown</strong>
-        </div>
+        </div> -->
 
         <div class="recorder-area">
             <button class="record-button" id="recordBtn">
-                <span class="mic-icon" id="micIcon">🎤</span>
+                                <span class="mic-icon" id="micIcon">
+                                    <img src="../../public/voice2.png" alt="Mic" style="width:32px;height:32px;" />
+                                </span>
             </button>
 
             <div class="timer" id="timer">00:00</div>
@@ -305,9 +314,11 @@
                 startTime = Date.now();
 
                 recordBtn.classList.add('recording');
-                micIcon.textContent = '⏹';
+                // Show red square stop icon
+                micIcon.innerHTML = '<svg width="40" height="40" viewBox="0 0 40 40"><rect x="6" y="6" width="28" height="28" rx="6" fill="#f44336"/></svg>';
                 statusText.textContent = 'Recording...';
                 waveform.classList.add('active');
+                waveform.classList.add('recording');
                 startTimer();
                 animateWaveform();
 
@@ -322,11 +333,13 @@
 
             mediaRecorder.stop();
             mediaRecorder.stream.getTracks().forEach(track => track.stop());
-            
+
             isRecording = false;
             recordBtn.classList.remove('recording');
-            micIcon.textContent = '🎤';
+            // Replace mic icon with voice.png
+            micIcon.innerHTML = '<img src="../../public/voice2.png" alt="Mic" style="width:32px;height:32px;" />';
             waveform.classList.remove('active');
+            waveform.classList.remove('recording');
             clearInterval(timerInterval);
         }
 

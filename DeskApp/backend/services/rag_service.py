@@ -4,18 +4,64 @@ from services.vector_search_service import VectorSearchService
 from services.firestore_service import FirestoreService
 from core.config import settings
 
+
 class RAGService:
     """
     RAG (Retrieval Augmented Generation) Service
     
     Combines vector search with LLM to answer questions based on user's documents
     """
-    
     def __init__(self):
         self.vector_search = VectorSearchService()
         self.db = FirestoreService()
-        
         print("[RAG_SERVICE] Initialized")
+        
+    def _rephrase_query_with_llm(self, query: str) -> str:
+        """
+        Use Gemini to rephrase or expand the user query for better retrieval.
+        """
+        try:
+            import google.generativeai as genai
+            genai.configure(api_key=settings.GOOGLE_API_KEY)
+            model = genai.GenerativeModel('gemini-2.5-flash')
+            prompt =  f"""
+                You're an AI assistant who can understand user intent. The user can ask questions
+                about what they have captured in the LifeOS application, such as information related to:
+
+                1. work_career - Jobs, meetings, code, office, career
+                2. education_learning - Courses, tutorials, assignments, study
+                3. money_finance - Bills, banking, payments, investments
+                4. home_daily_life - Groceries, repairs, utilities, chores
+                5. health_wellbeing - Doctor, medications, fitness, wellness
+                6. family_relationships - Family events, kids, birthdays
+                7. travel_movement - Flights, hotels, trips, visas
+                8. shopping_consumption - Products, shopping, wishlists
+                9. entertainment_leisure - Movies, shows, games, concerts
+                10. social_community - Social media, news, forums
+                11. admin_documents - IDs, passports, forms, legal
+                12. ideas_thoughts - Personal notes, brainstorms, ideas
+                13. Other (can be anaything else not covered above)
+
+                Rephrase or expand the following user question to maximize the chance of retrieving
+                relevant documents from a personal knowledge base. Use synonyms, related terms,
+                and clarify ambiguous words.
+
+                Do NOT answer the question — only rewrite it for retrieval.
+
+                User question: {query}
+
+                Rephrased query:
+"""            
+            response = model.generate_content(prompt)
+            rephrased = response.text.strip()
+            if rephrased:
+                print(f"[RAG_SERVICE] Rephrased query: {rephrased}")
+                return rephrased
+        except Exception as e:
+            print(f"[RAG_SERVICE] Query rephrasing failed: {e}")
+        return query
+    
+    
     
     def answer_question(
         self,
@@ -45,16 +91,20 @@ class RAGService:
         """
         
         print(f"[RAG_SERVICE] Question: '{query}'")
-        
-        # Step 1: Search vector index for relevant content
+
+        # Step 1: Rephrase/expand query using LLM
+        retrieval_query = self._rephrase_query_with_llm(query)
+
+        # Step 2: Search vector index for relevant content
         search_results = self.vector_search.search(
-            query=query,
+            query=retrieval_query,
             user_id=user_id,
             num_results=num_results,
             filter_domain=filter_domain,
             filter_type=filter_type
         )
-        
+
+        print(f"[RAG_SERVICE] Used retrieval query: {retrieval_query}")
         print(f"[RAG_SERVICE] Found {len(search_results)} vector search results")
         
         if not search_results:
@@ -84,8 +134,8 @@ class RAGService:
                     
                     # Extract text content for context
                     if data.get('chunks'):
-                        # For documents, use first 2 chunks
-                        context_chunks.extend(data['chunks'][:2])
+                        # For documents, use first 10 chunks
+                        context_chunks.extend(data['chunks'][:10])
                     elif data.get('full_transcript'):
                         # For captures, use OCR text
                         context_chunks.append(data['full_transcript'])
@@ -131,10 +181,10 @@ User's question: {query}
 
 Instructions:
 - Answer the question directly and concisely
-- Use only information from the context above
+- Use only information from the context above if relevant information is available then give descriptive answer based on user question and context
 - Be specific with numbers, dates, amounts, and facts
 - If the answer is not in the context, say "I don't have that information in your documents"
-- Keep your answer under 3 sentences
+- Keep your answer under 10 sentences
 - Do not make up information
 
 Answer:"""
@@ -225,12 +275,12 @@ if __name__ == "__main__":
     
     # Test question
     result = service.answer_question(
-        query="how much is the billing statement",
+        query="can you find out the resources related to RAG service?",
         user_id="113314724333098866443",
         num_results=5
     )
     
-    print("\nQuestion:", "how much is the billing statement")
+    # print("\nQuestion:", result['query'])
     print("\nAnswer:", result['answer'])
     print("\nSources:", len(result['sources']))
     for i, source in enumerate(result['sources'], 1):

@@ -65,7 +65,8 @@
       width: 56px;
       height: 56px;
       border-radius: 50%;
-      background: #1a73e8;
+      background: #fff;
+      border: 3px solid #1a73e8;
       box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15), 0 4px 16px rgba(0, 0, 0, 0.12);
       cursor: pointer;
       display: flex;
@@ -89,15 +90,18 @@
     }
 
     .main-button.capturing {
-      background: #34a853;
+      background: #fff;
+      border-color: #34a853;
     }
 
     .main-button.processing {
-      background: #fbbc04;
+      background: #fff;
+      border-color: #fbbc04;
     }
 
     .main-button.error {
-      background: #ea4335;
+      background: #fff;
+      border-color: #ea4335;
     }
 
     .main-icon {
@@ -201,15 +205,15 @@
     }
 
     .menu-item.text::before {
-      content: '📝';
+      /* removed for PNG icon */
     }
 
     .menu-item.audio::before {
-      content: '🎤';
+      /* removed for PNG icon */
     }
 
     .menu-item.file::before {
-      content: '📎';
+      /* removed for PNG icon */
     }
 
     .tooltip {
@@ -278,15 +282,23 @@
   <div class="button-wrapper" id="buttonWrapper">
     <div class="drag-ring" id="dragRing"></div>
     <div class="main-button" id="mainButton">
-      <div class="main-icon" id="mainIcon">📸</div>
+      <div class="main-icon" id="mainIcon">
+        <img src="../../public/camera.png" alt="Camera" style="width:28px;height:28px;" /> 
+      </div>
       <div class="spinner"></div>
       <div class="close-button" id="closeButton">×</div>
     </div>
     <div class="menu-container" id="menuContainer">
       <div class="menu-options">
-        <div class="menu-item text" data-action="text" title="Text Note"></div>
-        <div class="menu-item audio" data-action="audio" title="Audio Note"></div>
-        <div class="menu-item file" data-action="file" title="Attach File"></div>
+        <div class="menu-item text" data-action="text" title="Text Note">
+          <img src="../../public/notes.png" alt="Text Note" style="width:28px;height:28px;" />
+        </div>
+        <div class="menu-item audio" data-action="audio" title="Audio Note">
+          <img src="../../public/voice2.png" alt="Voice Note" style="width:29px;height:29px;" />
+        </div>
+        <div class="menu-item file" data-action="file" title="Attach File">
+          <img src="../../public/attach.png" alt="Attach File" style="width:28px;height:28px;" />
+        </div>
       </div>
     </div>
     <div class="backdrop" id="backdrop"></div>
