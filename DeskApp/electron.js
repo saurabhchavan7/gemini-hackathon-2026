@@ -47,7 +47,7 @@ ipcMain.on('notification-send-capture', async (event, payload) => {
       payload.context.timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
       console.log('🌍 Added timezone to context:', payload.context.timezone);
     }
-    
+
     // ✅ SAVE AUDIO FIRST
     if (payload.audioBuffer) {
       const audioFilename = `audio_${Date.now()}.webm`;
@@ -108,30 +108,32 @@ ipcMain.handle('show-capture-notification', async (event, data) => {
 
   try {
     notificationWindow = new BrowserWindow({
+      icon: resolvePublicAsset(LOGO_PUBLIC_PATH),
       width: 380,
-    height: 240,
-    frame: false,
-    transparent: true,
-    alwaysOnTop: true,
-    resizable: false,
-    skipTaskbar: true,
-    show: false,
-    webPreferences: {
-      preload: path.join(__dirname, 'preload.js'),
-      contextIsolation: true,
-      nodeIntegration: false,
-      devTools: true
-        // IMPORTANT: do NOT add sandbox:true
+      height: 240,
+      frame: false,
+      transparent: true,
+      alwaysOnTop: true,
+      resizable: false,
+      skipTaskbar: true,
+      show: false,
+      autoHideMenuBar: true,
+
+      webPreferences: {
+        preload: path.join(__dirname, 'preload.js'),
+        contextIsolation: true,
+        nodeIntegration: false,
+        devTools: true
       }
     });
 
     const display = screen.getPrimaryDisplay();
-  const { x, y, width, height } = display.workArea;
-  const margin = 20;
-  notificationWindow.setPosition(
-    x + width - 380 - margin,
-    y + height - 240 - margin
-  );
+    const { x, y, width, height } = display.workArea;
+    const margin = 20;
+    notificationWindow.setPosition(
+      x + width - 380 - margin,
+      y + height - 240 - margin
+    );
 
     const notificationPath = path.join(__dirname, 'src', 'components', 'CaptureNotification.html');
     console.log('📄 Loading notification from:', notificationPath);
@@ -147,7 +149,7 @@ ipcMain.handle('show-capture-notification', async (event, data) => {
     });
 
     await notificationWindow.loadFile(notificationPath);
-    
+
     // Send capture data to notification
     notificationWindow.webContents.send('capture-data', data);
     notificationWindow.show(); // doesn't steal focus
@@ -217,15 +219,15 @@ ipcMain.handle('api-get-capture-v2', async (event, captureId) => {
 ipcMain.handle('api-ask-capture', async (event, captureId, question) => {
   try {
     console.log('💬 [IPC] Asking about capture:', captureId, 'Question:', question);
-    
+
     const token = await TokenManager.getToken();
     if (!token) {
       return { success: false, error: 'Not authenticated' };
     }
-    
+
     const params = new URLSearchParams();
     params.append('question', question);
-    
+
     const response = await axios.post(
       `${BACKEND_URL}/api/inbox/${captureId}/ask`,
       params,
@@ -236,16 +238,18 @@ ipcMain.handle('api-ask-capture', async (event, captureId, question) => {
         }
       }
     );
-    
+
     console.log('✅ [IPC] Answer received:', response.data.answer);
     return response.data;
-    
+
   } catch (error) {
     console.error('❌ [IPC] Failed to ask about capture:', error.message);
     console.error('❌ [IPC] Error details:', error.response?.data || error.response || error);
     return { success: false, error: error.response?.data?.detail || error.message };
   }
 });
+
+
 
 // Async initialization function
 async function initializeStore() {
@@ -259,11 +263,26 @@ async function initializeStore() {
   });
 }
 
+const LOGO_PUBLIC_PATH =
+  process.env.APP_LOGO_PUBLIC_PATH || "/logo.png";
+
+function resolvePublicAsset(publicPath) {
+  const cleanPath = publicPath.startsWith("/")
+    ? publicPath.slice(1)
+    : publicPath;
+
+  if (app.isPackaged) {
+    return path.join(process.resourcesPath, "public", cleanPath);
+  }
+
+  return path.join(__dirname, "public", cleanPath);
+}
+
 async function initializeStores() {
   Store = (await import('electron-store')).default;
-  
+
   authStore = new Store({ name: 'auth' });
-  
+
   store = new Store({
     defaults: {
       buttonPosition: { x: 100, y: 100 },
@@ -271,7 +290,7 @@ async function initializeStores() {
       captureShortcut: 'CommandOrControl+Shift+L'
     }
   });
-  
+
   console.log('✅ Stores initialized');
 }
 
@@ -290,8 +309,11 @@ if (!fs.existsSync(capturesDir)) {
 // Create main dashboard window
 async function createMainWindow() {
   mainWindow = new BrowserWindow({
+    icon: resolvePublicAsset(LOGO_PUBLIC_PATH),
     width: 1200,
     height: 800,
+      autoHideMenuBar: true,
+
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
@@ -398,7 +420,7 @@ async function createMainWindow() {
 
 function createFloatingButton() {
   console.log('🔍 [DEBUG] createFloatingButton called');
-  
+
   // Get saved position or use default
   const savedPosition = store.get('buttonPosition');
   console.log('🔍 [DEBUG] Saved position:', savedPosition);
@@ -414,6 +436,7 @@ function createFloatingButton() {
   console.log('🔍 [DEBUG] Button position:', { x, y });
 
   floatingButton = new BrowserWindow({
+    icon: resolvePublicAsset(LOGO_PUBLIC_PATH),
     width: 280,
     height: 280,
     x: x,
@@ -426,6 +449,8 @@ function createFloatingButton() {
     skipTaskbar: true,
     focusable: false,
     show: true,  // ⭐ Try with this first
+      autoHideMenuBar: true,
+
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
@@ -453,11 +478,11 @@ function createFloatingButton() {
     console.log('✅ [DEBUG] Floating button loaded successfully');
     console.log('🔍 [DEBUG] After load - isVisible?', floatingButton.isVisible());
     console.log('🔍 [DEBUG] After load - getBounds:', floatingButton.getBounds());
-    
+
     // Force show
     floatingButton.show();
     floatingButton.focus(); // Try to focus it
-    
+
     console.log('🔍 [DEBUG] After show() - isVisible?', floatingButton.isVisible());
     console.log('🔍 [DEBUG] After show() - isFocused?', floatingButton.isFocused());
   });
@@ -487,7 +512,7 @@ function createFloatingButton() {
     console.log('🔍 [DEBUG] Opening DevTools for floating button');
     floatingButton.webContents.openDevTools({ mode: 'detach' });
   }
-  
+
   console.log('🔍 [DEBUG] createFloatingButton completed');
 }
 
@@ -517,7 +542,7 @@ function registerShortcuts() {
 async function getActiveWindowContext() {
   // Get user's timezone from system
   const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
-  
+
   const context = {
     appName: 'Unknown',
     windowTitle: 'Unknown',
@@ -627,14 +652,14 @@ async function sendToBackend(screenshotPath, context, audioPath, textNote, trans
     const userTimezone = context.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone;
 
     const form = new FormData();
-    
+
     // Upload screenshot FILE (not path)
     const screenshotBuffer = fs.readFileSync(screenshotPath);
     form.append('screenshot_file', screenshotBuffer, {
       filename: path.basename(screenshotPath),
       contentType: 'image/png'
     });
-    
+
     // Upload audio FILE if exists
     if (audioPath && fs.existsSync(audioPath)) {
       const audioBuffer = fs.readFileSync(audioPath);
@@ -643,14 +668,14 @@ async function sendToBackend(screenshotPath, context, audioPath, textNote, trans
         contentType: 'audio/webm'
       });
     }
-    
+
     // Add metadata as form fields
     form.append('app_name', context.appName || 'Unknown');
     form.append('window_title', context.windowTitle || 'Unknown');
     form.append('url', context.url || '');
     form.append('timestamp', context.timestamp);
     form.append('timezone', userTimezone);
-    
+
     if (textNote) form.append('text_note', textNote);
     if (transcript) form.append('audio_transcript', transcript);
 
@@ -761,6 +786,7 @@ ipcMain.handle('send-capture-to-backend', async (event, payload) => {
 function showNotification(title, body) {
   if (Notification.isSupported()) {
     new Notification({
+      icon: resolvePublicAsset(LOGO_PUBLIC_PATH),
       title: title,
       body: body,
       icon: path.join(__dirname, 'public', 'icon.png')
@@ -825,7 +851,7 @@ ipcMain.handle('google-login', async (event) => {
         localStorage.setItem('token', '${token}');
         console.log('✅ Token saved to localStorage');
       `);
-      
+
       // Redirect to inbox
       await mainWindow.loadURL('http://localhost:3000/inbox');
       console.log('✅ Redirected to inbox');
@@ -1062,6 +1088,7 @@ ipcMain.handle('open-text-note-window', async () => {
     const context = await getActiveWindowContext();
 
     textNoteWindow = new BrowserWindow({
+      icon: resolvePublicAsset(LOGO_PUBLIC_PATH),
       width: 450,
       height: 380,
       frame: false,
@@ -1069,6 +1096,8 @@ ipcMain.handle('open-text-note-window', async () => {
       alwaysOnTop: true,
       resizable: false,
       skipTaskbar: true,
+        autoHideMenuBar: true,
+
       webPreferences: {
         preload: path.join(__dirname, 'preload.js'),
         contextIsolation: true,
@@ -1084,7 +1113,7 @@ ipcMain.handle('open-text-note-window', async () => {
     );
 
     await textNoteWindow.loadFile(path.join(__dirname, 'src', 'components', 'TextNoteWindow.html'));
-    
+
     textNoteWindow.webContents.send('text-note-data', { context });
 
     textNoteWindow.on('closed', () => {
@@ -1107,7 +1136,7 @@ ipcMain.handle('send-text-note', async (event, data) => {
     const userTimezone = data.context?.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone;
 
     const form = new FormData();
-    
+
     // No screenshot or audio for text-only note
     form.append('app_name', data.context?.appName || 'Unknown');
     form.append('window_title', data.context?.windowTitle || 'Unknown');
@@ -1124,7 +1153,7 @@ ipcMain.handle('send-text-note', async (event, data) => {
     });
 
     console.log('Text note sent successfully:', response.data);
-    
+
     if (floatingButton && !floatingButton.isDestroyed()) {
       floatingButton.webContents.send('capture-sent-success');
     }
@@ -1149,6 +1178,7 @@ ipcMain.handle('open-audio-note-window', async () => {
     const context = await getActiveWindowContext();
 
     audioNoteWindow = new BrowserWindow({
+      icon: resolvePublicAsset(LOGO_PUBLIC_PATH),
       width: 450,
       height: 460,
       frame: false,
@@ -1156,6 +1186,8 @@ ipcMain.handle('open-audio-note-window', async () => {
       alwaysOnTop: true,
       resizable: false,
       skipTaskbar: true,
+        autoHideMenuBar: true,
+
       webPreferences: {
         preload: path.join(__dirname, 'preload.js'),
         contextIsolation: true,
@@ -1171,7 +1203,7 @@ ipcMain.handle('open-audio-note-window', async () => {
     );
 
     await audioNoteWindow.loadFile(path.join(__dirname, 'src', 'components', 'AudioRecordWindow.html'));
-    
+
     audioNoteWindow.webContents.send('audio-note-data', { context });
 
     audioNoteWindow.on('closed', () => {
@@ -1194,14 +1226,14 @@ ipcMain.handle('send-audio-note', async (event, data) => {
     const userTimezone = data.context?.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone;
 
     const form = new FormData();
-    
+
     // Upload audio only
     const audioBuffer = Buffer.from(data.audioBuffer);
     form.append('audio_file', audioBuffer, {
       filename: `audio_${Date.now()}.webm`,
       contentType: 'audio/webm'
     });
-    
+
     form.append('app_name', data.context?.appName || 'Unknown');
     form.append('window_title', data.context?.windowTitle || 'Unknown');
     form.append('url', data.context?.url || '');
@@ -1216,7 +1248,7 @@ ipcMain.handle('send-audio-note', async (event, data) => {
     });
 
     console.log('Audio note sent successfully:', response.data);
-    
+
     if (floatingButton && !floatingButton.isDestroyed()) {
       floatingButton.webContents.send('capture-sent-success');
     }
@@ -1255,15 +1287,15 @@ ipcMain.handle('api-get-theme-clusters', async (event, numClusters = 4) => {
 ipcMain.handle('api-ask-question', async (event, question, filterDomain) => {
   try {
     console.log('🤔 [IPC] Asking question:', question);
-    
+
     // Get token from TokenManager (which knows the correct key)
     const TokenManager = require('./src/auth/TokenManager');
     const token = await TokenManager.getToken();
-    
+
     if (!token) {
       throw new Error('Not authenticated');
     }
-    
+
     const result = await CloudRunClient.askQuestion(question, filterDomain, token);
     console.log('✅ [IPC] Got answer');
     return result;
@@ -1302,11 +1334,11 @@ let notificationInterval = null;
 
 function startProactiveNotifications() {
   console.log('🔔 Starting proactive notification system...');
-  
+
   // Check every 30 minutes (1800000 ms)
   // For testing, use 2 minutes: 2 * 60 * 1000
-  const checkInterval = 30 * 60 * 1000;
-  
+  const checkInterval = 1 * 60 * 1000;
+
   notificationInterval = setInterval(async () => {
     try {
       const isAuth = await TokenManager.isAuthenticated();
@@ -1314,31 +1346,31 @@ function startProactiveNotifications() {
         console.log('⚠️ Not authenticated, skipping proactive check');
         return;
       }
-      
+
       console.log('🔔 Checking for proactive notifications...');
       const result = await CloudRunClient.getProactiveNotifications();
-      
+
       if (result.notifications && result.notifications.length > 0) {
         console.log('✅ Found', result.notifications.length, 'proactive notifications');
-        
+
         // Show the highest priority notification
         const topNotif = result.notifications[0];
         showProactiveNotification(topNotif);
       } else {
         console.log('ℹ️ No proactive notifications at this time');
       }
-      
+
     } catch (error) {
       console.error('❌ Proactive notification check failed:', error);
     }
   }, checkInterval);
-  
+
   // Also check immediately on startup (after 30 seconds)
   setTimeout(async () => {
     try {
       const isAuth = await TokenManager.isAuthenticated();
       if (!isAuth) return;
-      
+
       const result = await CloudRunClient.getProactiveNotifications();
       if (result.notifications && result.notifications.length > 0) {
         showProactiveNotification(result.notifications[0]);
@@ -1351,15 +1383,16 @@ function startProactiveNotifications() {
 
 function showProactiveNotification(notification) {
   console.log('🔔 Showing proactive notification:', notification.title);
-  
+
   // Close existing notification if open
   if (notificationWindow && !notificationWindow.isDestroyed()) {
     notificationWindow.close();
   }
   notificationWindow = null;
-  
+
   try {
     notificationWindow = new BrowserWindow({
+      icon: resolvePublicAsset(LOGO_PUBLIC_PATH),
       width: 420,
       height: 300,
       frame: false,
@@ -1368,6 +1401,8 @@ function showProactiveNotification(notification) {
       resizable: false,
       skipTaskbar: true,
       show: false,
+        autoHideMenuBar: true,
+
       webPreferences: {
         preload: path.join(__dirname, 'preload.js'),
         contextIsolation: true,
@@ -1387,9 +1422,9 @@ function showProactiveNotification(notification) {
 
     // Load HTML
     const notificationPath = path.join(__dirname, 'src', 'components', 'ProactiveNotification.html');
-    
+
     notificationWindow.loadFile(notificationPath);
-    
+
     // Send notification data
     notificationWindow.webContents.on('did-finish-load', () => {
       notificationWindow.webContents.send('proactive-notification-data', notification);
@@ -1431,7 +1466,7 @@ app.whenReady().then(async () => {
     console.log('✅ User already authenticated, creating floating button...');
     store.set('buttonPosition', { x: 300, y: 300 });
     createFloatingButton();
-    
+
     // START PROACTIVE NOTIFICATIONS
     startProactiveNotifications();
   }

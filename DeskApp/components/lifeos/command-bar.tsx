@@ -91,73 +91,73 @@ export function CommandBar({ onOpenCommandPalette }: CommandBarProps) {
 
       {/* Actions */}
       <div className="flex items-center gap-3">
-  {/* More Actions Dropdown */}
-  <DropdownMenu>
-    <DropdownMenuTrigger asChild>
-      <Button 
-  variant="outline" 
-  size="sm" 
-  className="gap-2 transition-colors hover:bg-[var(--color-bg-tertiary)]"
->
-  More Actions
-  <ChevronDown className="h-3.5 w-3.5" />
-</Button>
-    </DropdownMenuTrigger>
-    <DropdownMenuContent align="end">
-      <DropdownMenuItem>Export Data</DropdownMenuItem>
-      <DropdownMenuItem>Settings</DropdownMenuItem>
-    </DropdownMenuContent>
-  </DropdownMenu>
+        {/* More Actions Dropdown */}
+        {/* <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button
+              variant="outline"
+              size="sm"
+              className="gap-2 transition-colors hover:bg-[var(--color-bg-tertiary)]"
+            >
+              More Actions
+              <ChevronDown className="h-3.5 w-3.5" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuItem>Export Data</DropdownMenuItem>
+            <DropdownMenuItem>Settings</DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu> */}
 
-  {/* Theme Toggle */}
-  <Button
-    variant="ghost"
-    size="sm"
-    onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
-    className="h-9 w-9 rounded-full"
-    aria-label="Toggle theme"
-  >
-    {theme === 'dark' ? (
-      <Sun className="h-4 w-4" />
-    ) : (
-      <Moon className="h-4 w-4" />
-    )}
-  </Button>
+        {/* Theme Toggle */}
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
+          className="h-9 w-9 rounded-full"
+          aria-label="Toggle theme"
+        >
+          {theme === 'dark' ? (
+            <Sun className="h-4 w-4" />
+          ) : (
+            <Moon className="h-4 w-4" />
+          )}
+        </Button>
 
-  {/* User Profile Menu */}
-  <DropdownMenu>
-    <DropdownMenuTrigger asChild>
-      <Button
-        variant="ghost"
-        size="sm"
-        className="relative h-9 w-9 rounded-full"
-        aria-label="User menu"
-      >
-        <Avatar className="h-8 w-8">
-          <AvatarImage src={user?.picture} alt={user?.name || 'User'} />
-          <AvatarFallback className="text-white text-sm" style={{ backgroundColor: 'var(--color-accent-blue)' }}>
-            {user?.name?.charAt(0) || user?.email?.charAt(0) || 'U'}
-          </AvatarFallback>
-        </Avatar>
-      </Button>
-    </DropdownMenuTrigger>
-    <DropdownMenuContent align="end" className="w-56">
-      <DropdownMenuLabel className="font-normal">
-        <div className="flex flex-col space-y-1">
-          <p className="text-sm font-medium leading-none">{user?.name || 'User'}</p>
-          <p className="text-xs leading-none text-muted-foreground">
-            {user?.email || 'Loading...'}
-          </p>
-        </div>
-      </DropdownMenuLabel>
-      <DropdownMenuSeparator />
-      <DropdownMenuItem onClick={handleLogout} className="text-red-600 focus:text-red-600 cursor-pointer">
-        <LogOut className="mr-2 h-4 w-4" />
-        <span>Log out</span>
-      </DropdownMenuItem>
-    </DropdownMenuContent>
-  </DropdownMenu>
-</div>
+        {/* User Profile Menu */}
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="relative h-9 w-9 rounded-full"
+              aria-label="User menu"
+            >
+              <Avatar className="h-8 w-8">
+                <AvatarImage src={user?.picture} alt={user?.name || 'User'} />
+                <AvatarFallback className="text-white text-sm" style={{ backgroundColor: 'var(--color-accent-blue)' }}>
+                  {user?.name?.charAt(0) || user?.email?.charAt(0) || 'U'}
+                </AvatarFallback>
+              </Avatar>
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-56">
+            <DropdownMenuLabel className="font-normal">
+              <div className="flex flex-col space-y-1">
+                <p className="text-sm font-medium leading-none">{user?.name || 'User'}</p>
+                <p className="text-xs leading-none text-muted-foreground">
+                  {user?.email || 'Loading...'}
+                </p>
+              </div>
+            </DropdownMenuLabel>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem onClick={handleLogout} className="text-red-600 focus:text-red-600 cursor-pointer">
+              <LogOut className="mr-2 h-4 w-4" />
+              <span>Log out</span>
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </div>
     </header>
   );
 }

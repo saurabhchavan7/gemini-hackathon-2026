@@ -11,6 +11,36 @@
     "electron": "node_modules\\.bin\\electron.cmd .",
     "electron-dev": "concurrently \"npm run dev\" \"wait-on http://localhost:3000 && node_modules\\.bin\\electron.cmd .\""
   },
+ "build": {
+  "appId": "com.lifeos.desktop",
+  "productName": "LifeOS",
+  "files": [
+    "electron.js",
+    "preload.js",
+    "public/**/*",
+    ".next/**/*",
+    "package.json"
+  ],
+  "asarUnpack": [
+    "public/**/*"
+  ],
+  "extraMetadata": {
+    "main": "electron.js"
+  },
+  "directories": {
+    "buildResources": "public"
+  },
+  "win": {
+    "target": "nsis",
+     "icon": "public/logo.ico"
+  },
+  "mac": {
+    "target": "dmg"
+  },
+  "linux": {
+    "target": "AppImage"
+  }
+},
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",
     "@radix-ui/react-accordion": "1.2.2",

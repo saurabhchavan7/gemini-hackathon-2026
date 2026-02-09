@@ -85,6 +85,11 @@ sendAudioNote: (data) =>
 onAudioNoteData: (callback) =>
     ipcRenderer.on('audio-note-data', (_, data) => callback(data)),
 
+getAppLogo: () => ({
+  publicPath:
+    process.env.APP_LOGO_PUBLIC_PATH || "/logo.png",
+}),
+
   /**
    * Upload a file to the backend (PDF/DOCX)
    * @param {Object} opts - { path, name, size, type }

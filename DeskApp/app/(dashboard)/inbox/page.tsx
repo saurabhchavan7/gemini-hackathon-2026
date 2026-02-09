@@ -182,7 +182,9 @@ export default function InboxPage() {
         <ChevronDown className="h-3.5 w-3.5" />
       </Button>
     </DropdownMenuTrigger>
-    <DropdownMenuContent align="end">
+    <DropdownMenuContent 
+    align="end"
+  className="bg-background border border-border shadow-md">
       {sortOptions.map((option) => (
         <DropdownMenuItem
           key={option.value}
