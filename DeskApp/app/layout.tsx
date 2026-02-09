@@ -3,6 +3,8 @@ import type { Metadata, Viewport } from 'next'
 import { Geist, Geist_Mono } from 'next/font/google'
 import { Analytics } from '@vercel/analytics/next'
 import './globals.css'
+import { ThemeProvider } from '@/components/theme-provider';
+
 
 const _geist = Geist({ subsets: ["latin"] });
 const _geistMono = Geist_Mono({ subsets: ["latin"] });
@@ -35,17 +37,29 @@ export const viewport: Viewport = {
   colorScheme: 'dark',
 }
 
-export default function RootLayout({
-  children,
-}: Readonly<{
-  children: React.ReactNode
-}>) {
+// export default function RootLayout({
+//   children,
+// }: Readonly<{
+//   children: React.ReactNode
+// }>) {
+//   return (
+//     <html lang="en" className="dark">
+//       <body className="font-sans antialiased">
+//         {children}
+//         <Analytics />
+//       </body>
+//     </html>
+//   )
+// }
+
+export default function RootLayout({ children, }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="en" className="dark">
-      <body className="font-sans antialiased">
-        {children}
-        <Analytics />
+    <html lang="en" suppressHydrationWarning>
+      <body>
+        <ThemeProvider attribute="class" defaultTheme="light" enableSystem>
+          {children}
+        </ThemeProvider>
       </body>
     </html>
-  )
+  );
 }

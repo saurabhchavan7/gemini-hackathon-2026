@@ -29,8 +29,8 @@
             -webkit-backdrop-filter: blur(40px) saturate(180%);
             border: 0.5px solid rgba(255, 255, 255, 0.18);
             border-radius: 20px;
-            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12), 
-                        0 1px 3px rgba(0, 0, 0, 0.08);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12),
+                0 1px 3px rgba(0, 0, 0, 0.08);
             padding: 18px;
             overflow: hidden;
             animation: toastIn 300ms cubic-bezier(0.34, 1.56, 0.64, 1);
@@ -41,6 +41,7 @@
                 transform: translateY(20px) scale(0.95);
                 opacity: 0;
             }
+
             to {
                 transform: translateY(0) scale(1);
                 opacity: 1;
@@ -52,6 +53,7 @@
                 transform: translateY(0) scale(1);
                 opacity: 1;
             }
+
             to {
                 transform: translateY(20px) scale(0.95);
                 opacity: 0;
@@ -263,11 +265,25 @@
             transition: all 0.1s ease;
         }
 
-        .wave-bar:nth-child(1) { height: 6px; }
-        .wave-bar:nth-child(2) { height: 10px; }
-        .wave-bar:nth-child(3) { height: 14px; }
-        .wave-bar:nth-child(4) { height: 10px; }
-        .wave-bar:nth-child(5) { height: 6px; }
+        .wave-bar:nth-child(1) {
+            height: 6px;
+        }
+
+        .wave-bar:nth-child(2) {
+            height: 10px;
+        }
+
+        .wave-bar:nth-child(3) {
+            height: 14px;
+        }
+
+        .wave-bar:nth-child(4) {
+            height: 10px;
+        }
+
+        .wave-bar:nth-child(5) {
+            height: 6px;
+        }
 
         .record-btn:hover::before {
             background: rgba(0, 122, 255, 0.16);
@@ -321,24 +337,31 @@
         .record-btn.recording .wave-bar:nth-child(1) {
             animation-delay: 0s;
         }
+
         .record-btn.recording .wave-bar:nth-child(2) {
             animation-delay: 0.1s;
         }
+
         .record-btn.recording .wave-bar:nth-child(3) {
             animation-delay: 0.2s;
         }
+
         .record-btn.recording .wave-bar:nth-child(4) {
             animation-delay: 0.1s;
         }
+
         .record-btn.recording .wave-bar:nth-child(5) {
             animation-delay: 0s;
         }
 
         @keyframes pulseOuter {
-            0%, 100% {
+
+            0%,
+            100% {
                 transform: scale(1);
                 opacity: 1;
             }
+
             50% {
                 transform: scale(1.1);
                 opacity: 0.8;
@@ -346,10 +369,13 @@
         }
 
         @keyframes pulseMiddle {
-            0%, 100% {
+
+            0%,
+            100% {
                 transform: scale(1);
                 opacity: 1;
             }
+
             50% {
                 transform: scale(1.08);
                 opacity: 0.9;
@@ -357,9 +383,12 @@
         }
 
         @keyframes waveAnimation {
-            0%, 100% {
+
+            0%,
+            100% {
                 height: 6px;
             }
+
             50% {
                 height: 16px;
             }
@@ -420,294 +449,77 @@
             color: rgba(0, 122, 255, 1);
             font-weight: 700;
         }
+
+        .notification-meta {
+            display: flex;
+            gap: 8px;
+            font-size: 12px;
+            color: #5f6368;
+            margin-top: 8px;
+            align-items: center;
+        }
+
+        .meta-item {
+            display: flex;
+            align-items: center;
+        }
     </style>
 </head>
 
 <body>
-    <div class="notification">
-        <div class="header">
-            <span class="header-icon">📸</span>
-            <span class="header-title">Screenshot Captured!</span>
-            <button class="close-btn" id="closeBtn">×</button>
+    <div class="notification-card">
+        <!-- Brand Header -->
+        <div class="notification-brand">
+            <div class="brand-logo">M</div>
+            <span class="brand-name">Mnemos</span>
         </div>
 
-        <img class="thumbnail" id="thumbnail" src="" alt="Screenshot" />
+        <!-- Content -->
+        <div class="notification-title" id="title">New Capture</div>
+        <div class="notification-message" id="message">Your capture has been processed.</div>
 
-        <textarea class="text-input" id="textInput" placeholder="Add a note (optional)..." rows="2"></textarea>
-
-        <div class="actions">
-            <button class="record-btn" id="recordBtn">
-                <div class="record-btn-inner">
-                    <div class="mic-icon"></div>
-                    <div class="sound-waves">
-                        <div class="wave-bar"></div>
-                        <div class="wave-bar"></div>
-                        <div class="wave-bar"></div>
-                        <div class="wave-bar"></div>
-                        <div class="wave-bar"></div>
-                    </div>
-                </div>
-            </button>
-
-            <button class="send-btn" id="sendBtn">Send</button>
-
-            <div class="timer">
-                <span class="countdown" id="countdown">10</span>s
+        <div class="notification-meta">
+            <div class="meta-item">
+                <span id="domain">Unknown</span>
             </div>
+            <div class="meta-item">
+                <span>•</span>
+            </div>
+            <div class="meta-item">
+                <span id="intent">Unknown</span>
+            </div>
+        </div>
+
+        <!-- Actions -->
+        <div class="notification-footer">
+            <button class="btn btn-secondary" onclick="dismiss()">Later</button>
+            <button class="btn btn-primary" onclick="viewCapture()">View Now</button>
         </div>
     </div>
 
     <script>
-        console.log('✅ Notification script loaded');
+        let currentCaptureId = null;
 
-        // ---------------------------
-        // Core state
-        // ---------------------------
-        let captureData = null;
-        let countdownTimer = null;
-        let isRecording = false;
+        window.electronAPI.onCaptureNotificationData((data) => {
+            currentCaptureId = data.capture_id;
 
-        // Audio recording
-        let mediaRecorder = null;
-        let micStream = null;
-        let audioChunks = [];
-        let audioBuffer = null;
-
-        // Auto-send
-        let countdownValue = 10;
-        let autoSendEnabled = true;
-
-        // ---------------------------
-        // DOM elements
-        // ---------------------------
-        const textInput = document.getElementById('textInput');
-        const recordBtn = document.getElementById('recordBtn');
-        const sendBtn = document.getElementById('sendBtn');
-        const closeBtn = document.getElementById('closeBtn');
-        const thumbnail = document.getElementById('thumbnail');
-        const countdown = document.getElementById('countdown');
-
-        if (!window.electronAPI) {
-            console.error('❌ electronAPI not available');
-        }
-
-        // ---------------------------
-        // Event listeners
-        // ---------------------------
-        
-        // Toggle record button
-        recordBtn.addEventListener('click', function () {
-            if (isRecording) {
-                stopRecording();
-            } else {
-                startRecording();
-            }
+            document.getElementById('title').textContent = data.title || 'New Capture';
+            document.getElementById('message').textContent = data.summary || 'Your capture has been processed.';
+            document.getElementById('domain').textContent = data.domain?.replace(/_/g, ' ') || 'Unknown';
+            document.getElementById('intent').textContent = data.intent?.replace(/_/g, ' ') || 'Unknown';
         });
 
-        // Send button
-        sendBtn.addEventListener('click', function () {
-            cancelAutoSend();
-            sendToElectron(true);
-        });
+        function dismiss() {
+            window.close();
+        }
 
-        // Close button
-        closeBtn.addEventListener('click', function () {
-            closeWithAnimation();
-        });
-
-        // Textbox input - cancel auto-send if user is typing
-        textInput.addEventListener('input', function (e) {
-            if (!isRecording) {  // Only cancel if not recording
-                cancelAutoSend();
+        function viewCapture() {
+            if (currentCaptureId) {
+                window.electronAPI.openCaptureInInbox(currentCaptureId);
             }
-        });
-
-        // Listen for capture data from main process
-        window.electronAPI.onCaptureData(function (data) {
-            console.log('📸 Capture data received');
-            captureData = data;
-            showThumbnail(data.screenshotPath);
-            startAutoSendTimer();
-        });
-
-        // Listen for send failure
-        if (window.electronAPI.onCaptureSentFailed) {
-            window.electronAPI.onCaptureSentFailed(function () {
-                console.error('❌ Send failed');
-                sendBtn.disabled = false;
-                sendBtn.textContent = 'Failed - Retry?';
-                setTimeout(() => {
-                    sendBtn.textContent = 'Send';
-                }, 3000);
-            });
+            window.close();
         }
-
-        // ---------------------------
-        // Functions
-        // ---------------------------
-
-        function showThumbnail(screenshotPath) {
-            thumbnail.src = 'file://' + screenshotPath;
-        }
-
-        function cancelAutoSend() {
-            autoSendEnabled = false;
-            clearInterval(countdownTimer);
-            countdown.textContent = '∞';
-        }
-
-        function closeWithAnimation() {
-            const card = document.querySelector('.notification');
-            if (!card) {
-                window.close();
-                return;
-            }
-            card.classList.add('closing');
-            setTimeout(() => window.close(), 190);
-        }
-
-        function startAutoSendTimer() {
-            countdownValue = 10;
-            countdown.textContent = countdownValue;
-
-            clearInterval(countdownTimer);
-            countdownTimer = setInterval(() => {
-                countdownValue--;
-                countdown.textContent = countdownValue;
-
-                if (countdownValue <= 0) {
-                    clearInterval(countdownTimer);
-                    sendToElectron(false);
-                }
-            }, 1000);
-        }
-
-        // ---------------------------
-        // Recording controls
-        // ---------------------------
-        
-        async function startRecording() {
-            console.log("🎤 Starting audio recording");
-
-            cancelAutoSend();
-            isRecording = true;
-
-            // Update UI
-            textInput.value = "🎤 Recording audio note...";
-            textInput.disabled = true;
-            textInput.placeholder = "Recording...";
-
-            try {
-                // Request microphone access
-                micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
-                
-                // Create MediaRecorder
-                mediaRecorder = new MediaRecorder(micStream, {
-                    mimeType: 'audio/webm'
-                });
-                
-                audioChunks = [];
-
-                // Collect audio data
-                mediaRecorder.ondataavailable = (e) => {
-                    if (e.data.size > 0) {
-                        audioChunks.push(e.data);
-                    }
-                };
-
-                // Handle stop
-                mediaRecorder.onstop = async () => {
-                    const blob = new Blob(audioChunks, { type: 'audio/webm' });
-                    audioBuffer = await blob.arrayBuffer();
-                    console.log("✅ Audio recorded:", audioBuffer.byteLength, "bytes");
-                    
-                    // Update UI
-                    textInput.value = "";
-                    textInput.disabled = false;
-                    textInput.placeholder = "Audio recorded! Add text note or send...";
-                };
-
-                // Start recording
-                mediaRecorder.start();
-
-                // Update button appearance
-                recordBtn.classList.add("recording");
-
-                console.log("✅ Recording started");
-
-            } catch (err) {
-                console.error("❌ Failed to start recording:", err);
-                alert("Could not access microphone. Please allow microphone access.");
-                
-                isRecording = false;
-                textInput.value = "";
-                textInput.disabled = false;
-                textInput.placeholder = "Add a note (optional)...";
-            }
-        }
-
-        function stopRecording() {
-            if (!isRecording) return;
-
-            console.log("🛑 Stopping recording");
-
-            // Stop MediaRecorder
-            if (mediaRecorder && mediaRecorder.state !== 'inactive') {
-                mediaRecorder.stop();
-            }
-
-            // Stop microphone stream
-            if (micStream) {
-                micStream.getTracks().forEach(track => track.stop());
-            }
-
-            isRecording = false;
-
-            // Update button appearance
-            recordBtn.classList.remove("recording");
-
-            console.log("✅ Recording stopped");
-        }
-
-        // ---------------------------
-        // Send to Electron
-        // ---------------------------
-        
-        function sendToElectron(force = false) {
-            if (isRecording) {
-                console.warn("⛔ Cannot send while recording");
-                return;
-            }
-
-            if (!captureData) {
-                console.error("❌ No capture data");
-                return;
-            }
-
-            console.log("📤 Sending capture to backend");
-            console.log("   Text note:", textInput.value || "(none)");
-            console.log("   Audio:", audioBuffer ? `${audioBuffer.byteLength} bytes` : "(none)");
-
-            // Send to main process
-            window.electronAPI.sendCaptureFromNotification({
-                screenshotPath: captureData.screenshotPath,
-                context: captureData.context,
-                textNote: textInput.value || null,
-                audioBuffer: audioBuffer,
-                audioTranscript: null  // Backend will transcribe
-            });
-
-            // Update UI
-            sendBtn.disabled = true;
-            sendBtn.textContent = 'Sending...';
-            
-            // Close after short delay
-            setTimeout(closeWithAnimation, 400);
-        }
-
-        console.log('✅ Capture notification initialized');
     </script>
-
 </body>
 
 </html>

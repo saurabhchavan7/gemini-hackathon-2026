@@ -849,67 +849,174 @@ class FirestoreService:
         except Exception as e:
             print(f"[ERROR] get_resource_findings failed: {e}")
             return None
-
-    async def get_enhanced_capture_data(self, user_id: str, capture_id: str) -> dict:
+        
+    async def get_enhanced_capture_data_v2(self, user_id: str, capture_id: str) -> Optional[dict]:
         """
-        V2 ENHANCED: Fetches comprehensive capture with ALL subcollections
+        V2: Enhanced capture fetch using unified capture_id linkage
         
-        This method:
-        1. Fetches main comprehensive_captures document
-        2. Fetches research_results if firestore_doc_id exists
-        3. Fetches resource_findings if firestore_doc_id exists
-        4. Merges all data into rich response
+        Fetches:
+        1. Main comprehensive_captures document
+        2. research_results/{capture_id} (if exists)
+        3. task_resources/{capture_id} (if exists)
+        4. google_tasks WHERE capture_id == {id}
+        5. google_calendar_events WHERE capture_id == {id}
+        6. All other execution collections
         
-        Args:
-            user_id: User ID
-            capture_id: Capture ID
-            
-        Returns:
-            Complete capture data with all subcollections merged
+        Returns complete merged data structure
         """
         try:
-            # 1. Get main comprehensive capture
-            main_capture = await self.get_comprehensive_capture(user_id, capture_id)
+            print(f"[FIRESTORE V2] Fetching enhanced capture: {capture_id}")
             
-            if not main_capture:
+            # 1. Get main capture document
+            capture_ref = (
+                self._get_user_ref(user_id)
+                .collection("comprehensive_captures")
+                .document(capture_id)
+            )
+            
+            capture_doc = capture_ref.get()
+            
+            if not capture_doc.exists:
                 print(f"[FIRESTORE V2] Capture {capture_id} not found")
                 return None
             
-            print(f"[FIRESTORE V2] Building enhanced capture for {capture_id}")
+            capture_data = capture_doc.to_dict()
+            capture_data['id'] = capture_id
             
-            # 2. Fetch research results if available
-            if main_capture.get('research', {}).get('firestore_doc_id'):
-                research_doc_id = main_capture['research']['firestore_doc_id']
-                print(f"[FIRESTORE V2] Fetching research results: {research_doc_id}")
+            # 2. Fetch research_results/{capture_id}
+            if capture_data.get('research', {}).get('has_data'):
+                print(f"[FIRESTORE V2] Fetching research_results/{capture_id}")
+                research_doc = (
+                    self._get_user_ref(user_id)
+                    .collection("research_results")
+                    .document(capture_id)
+                    .get()
+                )
                 
-                research_data = await self.get_research_results(user_id, research_doc_id)
-                
-                if research_data:
-                    # Merge research data into main capture
-                    main_capture['research']['sources'] = research_data.get('sources', [])
-                    main_capture['research']['summary'] = research_data.get('summary', '')
-                    main_capture['research']['sources_count'] = research_data.get('sources_count', 0)
-                    print(f"[FIRESTORE V2] Merged {len(research_data.get('sources', []))} research sources")
+                if research_doc.exists:
+                    research_data = research_doc.to_dict()
+                    
+                    # Merge research data into capture
+                    if 'research' not in capture_data:
+                        capture_data['research'] = {}
+                    
+                    capture_data['research']['results'] = research_data.get('results', '')
+                    capture_data['research']['sources'] = []  # TODO: Parse sources from results
+                    capture_data['research']['sources_count'] = research_data.get('sources_count', 0)
+                    
+                    print(f"[FIRESTORE V2] ✓ Merged research data: {research_data.get('sources_count', 0)} sources")
             
-            # 3. Fetch resource findings if available
-            if main_capture.get('resources', {}).get('firestore_doc_id'):
-                resource_doc_id = main_capture['resources']['firestore_doc_id']
-                print(f"[FIRESTORE V2] Fetching resource findings: {resource_doc_id}")
+            # 3. Fetch task_resources/{capture_id}
+            if capture_data.get('resources', {}).get('has_data'):
+                print(f"[FIRESTORE V2] Fetching task_resources/{capture_id}")
+                resources_doc = (
+                    self._get_user_ref(user_id)
+                    .collection("task_resources")
+                    .document(capture_id)
+                    .get()
+                )
                 
-                resource_data = await self.get_resource_findings(user_id, resource_doc_id)
-                
-                if resource_data:
-                    # Merge resource data into main capture
-                    main_capture['resources']['resources'] = resource_data.get('resources', [])
-                    main_capture['resources']['ai_reasoning'] = resource_data.get('ai_reasoning', '')
-                    main_capture['resources']['learning_path'] = resource_data.get('learning_path', '')
-                    print(f"[FIRESTORE V2] Merged {len(resource_data.get('resources', []))} learning resources")
+                if resources_doc.exists:
+                    resources_data = resources_doc.to_dict()
+                    
+                    # Merge resources data
+                    if 'resources' not in capture_data:
+                        capture_data['resources'] = {}
+                    
+                    capture_data['resources']['resources'] = resources_data.get('resources', [])
+                    capture_data['resources']['summary'] = resources_data.get('summary', '')
+                    capture_data['resources']['learning_path'] = resources_data.get('learning_path', '')
+                    capture_data['resources']['ai_decision'] = resources_data.get('ai_decision', {})
+                    capture_data['resources']['resources_count'] = len(resources_data.get('resources', []))
+                    
+                    print(f"[FIRESTORE V2] ✓ Merged {capture_data['resources']['resources_count']} learning resources")
             
-            print(f"[FIRESTORE V2] Enhanced capture ready with all subcollections")
-            return main_capture
+            # 4. Fetch google_tasks WHERE capture_id == {id}
+            print(f"[FIRESTORE V2] Fetching google_tasks for capture {capture_id}")
+            tasks_query = (
+                self._get_user_ref(user_id)
+                .collection("google_tasks")
+                .where("capture_id", "==", capture_id)
+            )
+            
+            tasks_docs = tasks_query.stream()
+            tasks_list = []
+            
+            for task_doc in tasks_docs:
+                task_data = task_doc.to_dict()
+                task_data['firestore_doc_id'] = task_doc.id
+                tasks_list.append(task_data)
+            
+            if tasks_list:
+                print(f"[FIRESTORE V2] ✓ Found {len(tasks_list)} tasks")
+            
+            # 5. Fetch google_calendar_events WHERE capture_id == {id}
+            print(f"[FIRESTORE V2] Fetching google_calendar_events for capture {capture_id}")
+            events_query = (
+                self._get_user_ref(user_id)
+                .collection("google_calendar_events")
+                .where("capture_id", "==", capture_id)
+            )
+            
+            events_docs = events_query.stream()
+            events_list = []
+            
+            for event_doc in events_docs:
+                event_data = event_doc.to_dict()
+                event_data['firestore_doc_id'] = event_doc.id
+                events_list.append(event_data)
+            
+            if events_list:
+                print(f"[FIRESTORE V2] ✓ Found {len(events_list)} calendar events")
+            
+            # 6. Merge execution results into capture_data
+            if not capture_data.get('execution'):
+                capture_data['execution'] = {}
+            
+            if not capture_data['execution'].get('actions_executed'):
+                capture_data['execution']['actions_executed'] = []
+            
+            # Add tasks to actions_executed
+            for task in tasks_list:
+                capture_data['execution']['actions_executed'].append({
+                    "type": "task",
+                    "title": task.get('title'),
+                    "notes": task.get('notes'),
+                    "due_date": task.get('due_date'),
+                    "google_task_id": task.get('google_task_id'),
+                    "firestore_doc_id": task.get('firestore_doc_id'),
+                    "status": task.get('status'),
+                    "created_at": task.get('created_at')
+                })
+            
+            # Add events to actions_executed
+            for event in events_list:
+                capture_data['execution']['actions_executed'].append({
+                    "type": "calendar_event",
+                    "title": event.get('title'),
+                    "start_time": event.get('start_time'),
+                    "end_time": event.get('end_time'),
+                    "location": event.get('location'),
+                    "attendees": event.get('attendees', []),
+                    "google_calendar_id": event.get('google_calendar_id'),
+                    "google_calendar_link": event.get('google_calendar_link'),
+                    "firestore_doc_id": event.get('firestore_doc_id'),
+                    "status": event.get('status'),
+                    "created_at": event.get('created_at')
+                })
+            
+            # Update execution counts
+            capture_data['execution']['total_actions'] = len(capture_data['execution']['actions_executed'])
+            capture_data['execution']['successful'] = len([a for a in capture_data['execution']['actions_executed'] if a.get('status') in ['active', 'synced']])
+            
+            print(f"[FIRESTORE V2] ✓ Enhanced capture complete: {capture_data['execution']['total_actions']} total actions")
+            
+            return capture_data
             
         except Exception as e:
-            print(f"[ERROR] get_enhanced_capture_data failed: {e}")
+            print(f"[ERROR] get_enhanced_capture_data_v2 failed: {e}")
             import traceback
             traceback.print_exc()
             return None
+
+

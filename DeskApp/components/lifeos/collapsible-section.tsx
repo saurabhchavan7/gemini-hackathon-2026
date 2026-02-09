@@ -33,13 +33,16 @@ export function CollapsibleSection({
   emptyMessage = "No data available",
 }: CollapsibleSectionProps) {
   const [isExpanded, setIsExpanded] = useState(defaultOpen);
-  
+
   if (isEmpty) {
     return null;
   }
-  
+
   return (
-    <div className={cn("border border-border rounded-lg overflow-hidden", className)}>
+    <div className={cn("border rounded-lg overflow-hidden", className)} style={{
+      backgroundColor: 'var(--color-bg-card)',
+      borderColor: 'var(--color-border-light)'
+    }}>
       {/* Header */}
       <button
         onClick={() => setIsExpanded(!isExpanded)}
@@ -62,7 +65,7 @@ export function CollapsibleSection({
             )}
           </div>
         </div>
-        
+
         <div className="flex items-center gap-2">
           {badge !== undefined && (
             <Badge variant={badgeVariant} className="text-xs">
@@ -76,7 +79,7 @@ export function CollapsibleSection({
           )}
         </div>
       </button>
-      
+
       {/* Content */}
       {isExpanded && (
         <div className="p-4 pt-0">

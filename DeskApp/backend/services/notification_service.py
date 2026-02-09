@@ -226,7 +226,7 @@ class NotificationService:
                             'id': f"deadline_{memory['id']}_{action.get('intent', 'task')}",
                             'type': 'deadline',
                             'priority': priority,
-                            'title': '⏰ Deadline Approaching!',
+                            'title': 'Deadline Approaching!',
                             'message': f"{action.get('summary', 'Task')} is due in {int(hours_until)} hours",
                             'capture_id': memory['id'],
                             'created_at': datetime.utcnow().isoformat()
@@ -270,7 +270,7 @@ class NotificationService:
                             'id': f"event_{memory['id']}",
                             'type': 'event',
                             'priority': 9,
-                            'title': '📅 Event Starting Soon',
+                            'title': 'Event Starting Soon',
                             'message': f"{action.get('summary', 'Event')} starts in {minutes_until} minutes",
                             'capture_id': memory['id'],
                             'created_at': datetime.utcnow().isoformat()
@@ -309,7 +309,7 @@ class NotificationService:
                         'id': f"deal_{memory['id']}",
                         'type': 'shopping',
                         'priority': priority,
-                        'title': '🛍️ Deal Alert',
+                        'title': 'Deal Alert',
                         'message': action.get('summary', 'Shopping deal available')[:80],
                         'capture_id': memory['id'],
                         'created_at': datetime.utcnow().isoformat()

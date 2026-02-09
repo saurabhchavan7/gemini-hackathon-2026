@@ -108,31 +108,30 @@ ipcMain.handle('show-capture-notification', async (event, data) => {
 
   try {
     notificationWindow = new BrowserWindow({
-      width: 420,
-      height: 360,
-      frame: false,
-      transparent: true,
-      alwaysOnTop: true,
-      resizable: false,
-      skipTaskbar: true,
-      show: false,
-      webPreferences: {
-        preload: path.join(__dirname, 'preload.js'),
-        contextIsolation: true,
-        nodeIntegration: false,
-        devTools: true
+      width: 380,
+    height: 240,
+    frame: false,
+    transparent: true,
+    alwaysOnTop: true,
+    resizable: false,
+    skipTaskbar: true,
+    show: false,
+    webPreferences: {
+      preload: path.join(__dirname, 'preload.js'),
+      contextIsolation: true,
+      nodeIntegration: false,
+      devTools: true
         // IMPORTANT: do NOT add sandbox:true
       }
     });
 
-    // Bottom-right like Teams
     const display = screen.getPrimaryDisplay();
-    const { x, y, width, height } = display.workArea;
-    const margin = 16;
-    notificationWindow.setPosition(
-      x + width - 420 - margin,
-      y + height - 360 - margin
-    );
+  const { x, y, width, height } = display.workArea;
+  const margin = 20;
+  notificationWindow.setPosition(
+    x + width - 380 - margin,
+    y + height - 240 - margin
+  );
 
     const notificationPath = path.join(__dirname, 'src', 'components', 'CaptureNotification.html');
     console.log('📄 Loading notification from:', notificationPath);
@@ -1306,7 +1305,7 @@ function startProactiveNotifications() {
   
   // Check every 30 minutes (1800000 ms)
   // For testing, use 2 minutes: 2 * 60 * 1000
-  const checkInterval = 20 * 60 * 1000;
+  const checkInterval = 1 * 60 * 1000;
   
   notificationInterval = setInterval(async () => {
     try {

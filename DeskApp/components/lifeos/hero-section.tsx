@@ -14,20 +14,20 @@ interface HeroSectionProps {
   domainConfidence?: number;
 }
 
-const DOMAIN_ICONS: Record<string, string> = {
-  work_career: "💼",
-  education_learning: "📚",
-  money_finance: "💰",
-  home_daily_life: "🏠",
-  health_wellbeing: "❤️",
-  family_relationships: "👨‍👩‍👧‍👦",
-  travel_movement: "✈️",
-  shopping_consumption: "🛒",
-  entertainment_leisure: "🎮",
-  social_community: "👥",
-  admin_documents: "📋",
-  ideas_thoughts: "💡",
-};
+// const DOMAIN_ICONS: Record<string, string> = {
+//   work_career: "💼",
+//   education_learning: "📚",
+//   money_finance: "💰",
+//   home_daily_life: "🏠",
+//   health_wellbeing: "❤️",
+//   family_relationships: "👨‍👩‍👧‍👦",
+//   travel_movement: "✈️",
+//   shopping_consumption: "🛒",
+//   entertainment_leisure: "🎮",
+//   social_community: "👥",
+//   admin_documents: "📋",
+//   ideas_thoughts: "💡",
+// };
 
 const DOMAIN_LABELS: Record<string, string> = {
   work_career: "Work & Career",
@@ -67,14 +67,14 @@ const URGENCY_COLORS: Record<string, string> = {
 function getTimeUntil(deadline: Date): { text: string; urgent: boolean } {
   const now = new Date();
   const diff = deadline.getTime() - now.getTime();
-  
+
   if (diff < 0) {
     return { text: "Overdue", urgent: true };
   }
-  
+
   const hours = Math.floor(diff / (1000 * 60 * 60));
   const days = Math.floor(hours / 24);
-  
+
   if (hours < 24) {
     return { text: `in ${hours} hour${hours !== 1 ? 's' : ''}`, urgent: true };
   } else if (days === 1) {
@@ -99,114 +99,127 @@ export function HeroSection({
   deadline,
   domainConfidence,
 }: HeroSectionProps) {
-  const domainIcon = DOMAIN_ICONS[domain] || "📁";
+ // const domainIcon = DOMAIN_ICONS[domain] || "📁";
   const domainLabel = DOMAIN_LABELS[domain] || domain;
-  
+
   const deadlineDate = deadline ? (deadline instanceof Date ? deadline : new Date(deadline)) : null;
   const timeUntil = deadlineDate ? getTimeUntil(deadlineDate) : null;
-  
+
   return (
-    <div className="bg-gradient-to-br from-muted/40 to-muted/20 rounded-xl p-5 border border-border/50">
-      {/* Domain & Intent Badges */}
-      <div className="flex flex-wrap gap-2 mb-3">
-        <Badge 
-          variant="outline" 
-          className="text-xs font-medium bg-background/50 backdrop-blur-sm"
-        >
-          <span className="mr-1.5">{domainIcon}</span>
-          {domainLabel}
-          {domainConfidence && domainConfidence < 0.95 && (
-            <span className="ml-1.5 text-muted-foreground">
-              ({Math.round(domainConfidence * 100)}%)
-            </span>
-          )}
-        </Badge>
-        
-        <Badge 
-          className={cn(
-            "text-xs font-medium",
-            INTENT_COLORS[intent] || "bg-muted text-foreground"
-          )}
-        >
-          {intent.replace(/_/g, ' ')}
-        </Badge>
-        
-        <Badge 
-          variant="outline"
-          className={cn(
-            "text-xs font-medium",
-            URGENCY_COLORS[urgency] || "bg-muted"
-          )}
-        >
-          <AlertCircle className="mr-1 h-3 w-3" />
-          {urgency}
-        </Badge>
-      </div>
-      
-      {/* Title */}
-      <h2 className="text-xl font-semibold text-foreground leading-tight mb-2">
-        {title}
-      </h2>
-      
-      {/* Summary */}
-      {summary && (
-        <p className="text-sm text-muted-foreground leading-relaxed mb-3">
-          {summary}
-        </p>
-      )}
-      
-      {/* Deadline - Prominent Display */}
-      {deadlineDate && timeUntil && (
-        <div className={cn(
-          "flex items-center gap-2 px-3 py-2 rounded-lg border",
-          timeUntil.urgent 
-            ? "bg-orange-50 border-orange-200 dark:bg-orange-950 dark:border-orange-800" 
-            : "bg-blue-50 border-blue-200 dark:bg-blue-950 dark:border-blue-800"
-        )}>
-          <Calendar className={cn(
-            "h-4 w-4",
-            timeUntil.urgent ? "text-orange-600" : "text-blue-600"
-          )} />
-          <div className="flex-1">
-            <div className="flex items-baseline gap-2">
-              <span className={cn(
-                "text-sm font-semibold",
-                timeUntil.urgent ? "text-orange-900 dark:text-orange-100" : "text-blue-900 dark:text-blue-100"
-              )}>
-                {deadlineDate.toLocaleDateString('en-US', { 
-                  weekday: 'short',
-                  month: 'short', 
-                  day: 'numeric',
-                  year: deadlineDate.getFullYear() !== new Date().getFullYear() ? 'numeric' : undefined
-                })}
+<div className="relative overflow-hidden rounded-xl p-6 border" style={{ 
+  backgroundColor: 'var(--bg-card)',
+  borderColor: 'var(--border-light)'
+}}>
+  
+      <div className="relative">
+        {/* Domain & Intent Badges */}
+        <div className="flex flex-wrap items-center gap-2 mb-3">
+          <Badge
+            className="text-xs font-medium px-3 py-1 rounded-full border-0"
+            style={{
+              backgroundColor: 'var(--accent-blue-light)',
+              color: 'var(--accent-blue)'
+            }}
+          >
+            {domainLabel}
+            {domainConfidence && domainConfidence < 0.95 && (
+              <span className="ml-1.5 text-muted-foreground">
+                ({Math.round(domainConfidence * 100)}%)
               </span>
-              {deadlineDate.getHours() !== 0 && (
+            )}
+          </Badge>
+
+          <Badge
+            className="text-xs font-medium px-3 py-1 rounded-full border-0"
+            style={{
+              backgroundColor: 'var(--accent-orange-light)',
+              color: 'var(--accent-orange)'
+            }}
+          >
+            {intent.replace(/_/g, ' ')}
+          </Badge>
+
+          <Badge
+            className="text-xs font-medium px-3 py-1 rounded-full border-0"
+            style={{
+              backgroundColor: urgency === 'critical' || urgency === 'high'
+                ? 'var(--accent-red-light)'
+                : 'var(--accent-green-light)',
+              color: urgency === 'critical' || urgency === 'high'
+                ? 'var(--accent-red)'
+                : 'var(--accent-green)'
+            }}
+          >
+            <AlertCircle className="mr-1 h-3 w-3" />
+            {urgency}
+          </Badge>
+        </div>
+
+        {/* Title */}
+        <h2 className="text-xl font-semibold text-foreground leading-tight mb-2">
+          {title}
+        </h2>
+
+        {/* Summary */}
+        {summary && (
+          <p className="text-sm text-muted-foreground leading-relaxed mb-3">
+            {summary}
+          </p>
+        )}
+
+        {/* Deadline - Prominent Display */}
+        {deadlineDate && timeUntil && (
+          <div className={cn(
+            "flex items-center gap-2 px-3 py-2 rounded-lg border backdrop-blur-sm transition-all",
+            timeUntil.urgent
+              ? "bg-orange-500/10 border-orange-500/30 shadow-sm shadow-orange-500/10"
+              : "bg-blue-500/10 border-blue-500/30 shadow-sm shadow-blue-500/10"
+          )}>
+            <Calendar className={cn(
+              "h-4 w-4",
+              timeUntil.urgent ? "text-orange-500" : "text-blue-500"
+            )} />
+            <div className="flex-1">
+              <div className="flex items-baseline gap-2">
                 <span className={cn(
-                  "text-xs",
-                  timeUntil.urgent ? "text-orange-700 dark:text-orange-300" : "text-blue-700 dark:text-blue-300"
+                  "text-sm font-semibold",
+                  timeUntil.urgent ? "text-orange-600 dark:text-orange-400" : "text-blue-600 dark:text-blue-400"
                 )}>
-                  {deadlineDate.toLocaleTimeString('en-US', { 
-                    hour: 'numeric',
-                    minute: '2-digit'
+                  {deadlineDate.toLocaleDateString('en-US', {
+                    weekday: 'short',
+                    month: 'short',
+                    day: 'numeric',
+                    year: deadlineDate.getFullYear() !== new Date().getFullYear() ? 'numeric' : undefined
                   })}
                 </span>
-              )}
-            </div>
-            <div className="flex items-center gap-1.5 mt-0.5">
-              <Clock className={cn(
-                "h-3 w-3",
-                timeUntil.urgent ? "text-orange-500" : "text-blue-500"
-              )} />
-              <span className={cn(
-                "text-xs font-medium",
-                timeUntil.urgent ? "text-orange-700 dark:text-orange-300" : "text-blue-700 dark:text-blue-300"
-              )}>
-                {timeUntil.text}
-              </span>
+                {deadlineDate.getHours() !== 0 && (
+                  <span className={cn(
+                    "text-xs",
+                    timeUntil.urgent ? "text-orange-600 dark:text-orange-400" : "text-blue-600 dark:text-blue-400"
+                  )}>
+                    {deadlineDate.toLocaleTimeString('en-US', {
+                      hour: 'numeric',
+                      minute: '2-digit'
+                    })}
+                  </span>
+                )}
+              </div>
+              <div className="flex items-center gap-1.5 mt-0.5">
+                <Clock className={cn(
+                  "h-3 w-3",
+                  timeUntil.urgent ? "text-orange-500" : "text-blue-500"
+                )} />
+                <span className={cn(
+                  "text-xs font-medium",
+                  timeUntil.urgent ? "text-orange-600 dark:text-orange-400" : "text-blue-600 dark:text-blue-400"
+                )}>
+                  {timeUntil.text}
+                </span>
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        )}
+      </div>
     </div>
   );
 }

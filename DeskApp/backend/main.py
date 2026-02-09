@@ -1144,6 +1144,11 @@ async def get_full_capture_v2(
     capture_id: str,
     authorization: str = Header(None)
 ):
+    """
+    V2 ENHANCED: Get comprehensive capture with ALL subcollections
+    Uses unified capture_id linkage strategy
+    """
+    
     if not authorization or not authorization.startswith("Bearer "):
         raise HTTPException(status_code=401, detail="Unauthorized")
     
@@ -1156,41 +1161,39 @@ async def get_full_capture_v2(
         raise HTTPException(status_code=401, detail=f"Invalid token: {str(e)}")
     
     try:
-        db = FirestoreService()  # REMOVE THE IMPORT LINE
+        db = FirestoreService()
         
         print(f"[API V2] Fetching enhanced capture: {capture_id}")
         
-        capture_data = await db.get_enhanced_capture_data(user_id, capture_id)
+        # Use new V2 fetch method with unified capture_id linkage
+        capture_data = await db.get_enhanced_capture_data_v2(user_id, capture_id)
         
         if not capture_data:
             raise HTTPException(status_code=404, detail="Capture not found")
         
-        bucket = "rag-gcs-bucket"
+        # Generate public GCS URLs
+        bucket = os.getenv('GCS_BUCKET', 'rag-gcs-bucket')
         
         if capture_data.get('input'):
             input_data = capture_data['input']
             
+            # Screenshot
             if input_data.get('screenshot_path'):
                 screenshot_path = input_data['screenshot_path']
                 public_url = f"https://storage.googleapis.com/{bucket}/{screenshot_path}"
                 input_data['screenshot_signed_url'] = public_url
                 input_data['screenshot_url'] = public_url
-                print(f"[API V2] Using public URL for screenshot: {public_url}")
+                print(f"[API V2] Using public URL for screenshot")
             
+            # Audio
             if input_data.get('audio_path'):
                 audio_path = input_data['audio_path']
                 public_url = f"https://storage.googleapis.com/{bucket}/{audio_path}"
                 input_data['audio_signed_url'] = public_url
                 input_data['audio_url'] = public_url
-                print(f"[API V2] Using public URL for audio: {public_url}")
+                print(f"[API V2] Using public URL for audio")
         
-        if capture_data.get('attached_files'):
-            for file in capture_data['attached_files']:
-                if file.get('gcs_path'):
-                    public_url = f"https://storage.googleapis.com/{bucket}/{file['gcs_path']}"
-                    file['signed_url'] = public_url
-                    file['url'] = public_url
-        
+        # Build enhanced metadata
         timeline = capture_data.get("timeline", {})
         agents_completed = {
             "perception": bool(timeline.get("perception_completed")),
@@ -1210,17 +1213,17 @@ async def get_full_capture_v2(
                 "user_id": user_id,
                 "status": capture_data.get("status"),
                 "domain": capture_data.get("classification", {}).get("domain"),
-                "total_actions": capture_data.get("classification", {}).get("total_actions", 0),
+                "total_actions": capture_data.get("execution", {}).get("total_actions", 0),
                 "agents_completed": agents_completed,
                 "has_errors": len(capture_data.get("errors", [])) > 0,
-                "has_research": bool(capture_data.get('research', {}).get('sources')),
-                "has_resources": bool(capture_data.get('resources', {}).get('resources')),
-                "research_sources_count": len(capture_data.get('research', {}).get('sources', [])),
-                "resources_count": len(capture_data.get('resources', {}).get('resources', []))
+                "has_research": capture_data.get('research', {}).get('has_data', False),
+                "has_resources": capture_data.get('resources', {}).get('has_data', False),
+                "research_sources_count": capture_data.get('research', {}).get('sources_count', 0),
+                "resources_count": capture_data.get('resources', {}).get('resources_count', 0)
             }
         }
         
-        print(f"[API V2] Enhanced capture ready")
+        print(f"[API V2] Enhanced capture ready with unified linkage")
         return response
         
     except HTTPException:
@@ -1230,7 +1233,6 @@ async def get_full_capture_v2(
         import traceback
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
-
 
 @app.get("/api/captures/recent")
 async def get_recent_captures(

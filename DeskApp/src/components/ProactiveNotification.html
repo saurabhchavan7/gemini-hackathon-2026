@@ -1,99 +1,137 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <style>
-    * { margin: 0; padding: 0; box-sizing: border-box; }
-    body {
-      font-family: 'Segoe UI', system-ui, sans-serif;
-      background: transparent;
-      overflow: hidden;
-    }
-    .notification-card {
-      width: 420px;
-      height: 300px;
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-      border-radius: 16px;
-      padding: 24px;
-      box-shadow: 0 20px 60px rgba(0,0,0,0.3);
-      color: white;
-      display: flex;
-      flex-direction: column;
-      justify-content: space-between;
-    }
-    .notification-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: start;
-    }
-    .notification-icon {
-      font-size: 48px;
-      margin-bottom: 12px;
-    }
-    .notification-title {
-      font-size: 20px;
-      font-weight: 600;
-      margin-bottom: 8px;
-    }
-    .notification-message {
-      font-size: 16px;
-      line-height: 1.5;
-      opacity: 0.95;
-    }
-    .notification-type {
-      display: inline-block;
-      padding: 4px 12px;
-      background: rgba(255,255,255,0.2);
-      border-radius: 12px;
-      font-size: 12px;
-      text-transform: uppercase;
-      letter-spacing: 0.5px;
-    }
-    .notification-footer {
-      display: flex;
-      gap: 12px;
-      margin-top: 16px;
-    }
-    .btn {
-      flex: 1;
-      padding: 12px;
-      border: none;
-      border-radius: 8px;
-      font-size: 14px;
-      font-weight: 600;
-      cursor: pointer;
-      transition: all 0.2s;
-    }
-    .btn-primary {
-      background: white;
-      color: #667eea;
-    }
-    .btn-primary:hover {
-      transform: translateY(-2px);
-      box-shadow: 0 4px 12px rgba(255,255,255,0.3);
-    }
-    .btn-secondary {
-      background: rgba(255,255,255,0.2);
-      color: white;
-    }
-    .btn-secondary:hover {
-      background: rgba(255,255,255,0.3);
-    }
-  </style>
+  
+    <style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: 'Inter', 'Segoe UI', system-ui, sans-serif;
+    background: transparent;
+    overflow: hidden;
+  }
+  .notification-card {
+    width: 380px;
+    background: linear-gradient(135deg, #e8f0fe 0%, #d2e3fc 100%);
+    border-radius: 16px;
+    padding: 20px;
+    box-shadow: 0 12px 32px rgba(0,0,0,0.18);
+    color: #202124;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    border: 1px solid rgba(26, 115, 232, 0.2);
+  }
+  .notification-brand {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 8px;
+  }
+  .brand-logo {
+    width: 24px;
+    height: 24px;
+    background: linear-gradient(135deg, #1a73e8 0%, #ea8600 100%);
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 14px;
+    color: white;
+    font-weight: 700;
+  }
+  .brand-name {
+    font-size: 13px;
+    font-weight: 600;
+    color: #1a73e8;
+    letter-spacing: 0.3px;
+  }
+  .notification-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  .notification-icon {
+    font-size: 32px;
+    flex-shrink: 0;
+  }
+  .notification-content {
+    flex: 1;
+    min-width: 0;
+  }
+  .notification-type {
+    display: inline-block;
+    padding: 3px 10px;
+    background: #1a73e8;
+    color: #ffffff;
+    border-radius: 12px;
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 6px;
+  }
+  .notification-title {
+    font-size: 16px;
+    font-weight: 600;
+    margin-bottom: 6px;
+    color: #202124;
+    line-height: 1.3;
+  }
+  .notification-message {
+    font-size: 14px;
+    line-height: 1.5;
+    color: #5f6368;
+  }
+  .notification-footer {
+    display: flex;
+    gap: 10px;
+    margin-top: 8px;
+  }
+  .btn {
+    flex: 1;
+    padding: 10px 16px;
+    border: none;
+    border-radius: 10px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+    font-family: inherit;
+  }
+  .btn-primary {
+    background: #1a73e8;
+    color: white;
+  }
+  .btn-primary:hover {
+    background: #1557b0;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(26, 115, 232, 0.3);
+  }
+  .btn-secondary {
+    background: #ffffff;
+    color: #5f6368;
+    border: 1px solid #dadce0;
+  }
+  .btn-secondary:hover {
+    background: #f8f9fa;
+    border-color: #5f6368;
+  }
+</style>
+
 </head>
 <body>
   <div class="notification-card">
-    <div class="notification-header">
-      <div>
-        <div class="notification-icon" id="icon">🔔</div>
-        <span class="notification-type" id="type">Notification</span>
-      </div>
+    <!-- Brand Header -->
+    <div class="notification-brand">
+      <div class="brand-logo">M</div>
+      <span class="brand-name">Mnemos</span>
     </div>
     
-    <div>
-      <div class="notification-title" id="title">Loading...</div>
-      <div class="notification-message" id="message">Please wait...</div>
-    </div>
+    <!-- Content -->
+    <div class="notification-title" id="title">Loading...</div>
+    <div class="notification-message" id="message">Please wait...</div>
     
+    <!-- Actions -->
     <div class="notification-footer">
       <button class="btn btn-secondary" onclick="dismiss()">Dismiss</button>
       <button class="btn btn-primary" onclick="viewCapture()">View</button>
@@ -106,15 +144,11 @@
     window.electronAPI.onProactiveNotificationData((notification) => {
       currentNotification = notification;
       
-      // Extract icon from title (emoji at start)
-      const iconMatch = notification.title.match(/^([\u{1F300}-\u{1F9FF}])\s*/u);
-      const icon = iconMatch ? iconMatch[1] : '🔔';
+      // Clean title (remove emoji if present)
       const title = notification.title.replace(/^[\u{1F300}-\u{1F9FF}]\s*/u, '');
       
-      document.getElementById('icon').textContent = icon;
       document.getElementById('title').textContent = title;
       document.getElementById('message').textContent = notification.message;
-      document.getElementById('type').textContent = notification.type;
     });
 
     function dismiss() {
@@ -123,8 +157,6 @@
 
     function viewCapture() {
       if (currentNotification && currentNotification.capture_id) {
-        // Navigate to inbox and select the capture
-        // This would require IPC to main window
         window.electronAPI.openCaptureInInbox(currentNotification.capture_id);
       }
       window.close();

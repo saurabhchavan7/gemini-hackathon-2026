@@ -19,13 +19,13 @@ function SearchPageContent() {
   return (
     <div className="flex h-full flex-col">
       {/* Header */}
-      <div className="border-b border-border px-6 py-4">
+      {/* <div className="border-b border-border px-6 py-4">
         <div className="flex items-center gap-3">
           <Search className="h-5 w-5 text-muted-foreground" />
           <h1 className="text-xl font-semibold text-foreground">AI Search</h1>
           <span className="text-sm text-muted-foreground">Ask questions about your captures</span>
         </div>
-      </div>
+      </div> */}
 
       {/* AI Chat */}
       <SearchChat />
