@@ -4,6 +4,8 @@
 
 **Team Mnemos:** Sapna Chavan · Saurabh Chavan · Rohit Kosamkar
 
+**Demo Video:** [Mnemos – An AI Second Brain Built with Gemini 3 (Desktop App Demo)](https://youtu.be/h1phN-19mR0)
+
 ## Inspiration
 
 Mnemos was inspired by small but repeated moments that all of us on the team experienced in our daily lives.
