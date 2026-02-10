@@ -1,186 +1,188 @@
 # Mnemos - Memory Meets Intelligence
 
-**Hackathon Date:** 9 February 2026  
+**Hackathon Date:** 9 February 2026
+
 **Team Mnemos:** Sapna Chavan · Saurabh Chavan · Rohit Kosamkar
 
-## Problem Statement
-Modern knowledge work is defined by fragmented digital inputs screenshots, links, emails, PDFs, and voice notes captured with good intent but rarely revisited. The result is:
+## Inspiration
 
-- **Information overload** across tools not designed to work together.
-- **Lost intent** (“I’ll do this later”) due to context switching.
-- **Manual follow-ups** for tasks, reminders, and research.
+Mnemos was inspired by small but repeated moments that all of us on the team experienced in our daily lives.
 
-Mnemos addresses this gap by turning fleeting captures into **structured, actionable intelligence**—automatically.
+We would capture screenshots of something interesting, bookmark a job post or a research paper, or save a technical thread with the intention of coming back to it later. But work continued, meetings started, priorities shifted, and those intentions quietly faded. Deadlines passed, opportunities expired, and valuable information remained scattered across tools that were never designed to work together.
 
-## Solution Overview
-Mnemos is a desktop “second brain” that captures information at the moment it appears, understands its **context and intent**, and **proactively executes actions** so users don’t have to.
+We realized the problem was not a lack of information, but the gap between **information consumption and meaningful action**. Existing tools are reactive, they store information, but they wait. They do not understand intent, urgency, or timing. We wanted a system that continues working even when our attention moves elsewhere.
 
-With a single shortcut widget, users capture screenshots, audio, text, or files. Gemini 3 intelligence analyzes the capture, classifies it into life domains, extracts action items, and routes it through a multi‑agent system for research, reminders, and tool integrations (Calendar, Tasks, Gmail). Users return later to a curated, context‑aware knowledge base ready for action.
+That need led us to build **Mnemos**.
 
----
+ 
 
-## High‑Level Architecture
-Mnemos uses a modular, event‑driven, multi‑agent architecture that turns raw captures into structured intelligence and proactive execution.
+## What It Does
 
-![Mnemos High-Level Architecture](architecture/MnemosHighLevelArchitecture.png)
+Mnemos is a desktop-based AI-powered second brain that captures information the moment it appears and continues working on it in the background.
 
-### 1) User Authentication & Identity Management
-- Google OAuth for sign‑in
-- JWT-based session management
-- Secure access to Google services (Calendar, Tasks, Gmail)
+With a single shortcut (Ctrl + Shift + L) or a widget, users can capture screenshots, voice notes, text snippets, and documents - all without breaking focus.
 
-### 2) Frontend Layer (User Interaction)
-- Electron desktop app
-- Capture modes: **screenshot, audio, text, file upload**
-- Shortcut‑first design to avoid workflow disruption
+**Gemini 3** then understands the content, context, and intent behind each capture, classifies it across life domains using a three-layer universal classification framework, and extracts actionable items such as deadlines, follow-ups, or tasks.
 
-### 3) API Layer (Backend Gateway)
-- FastAPI gateway for REST + WebSockets
-- CORS management and request validation
-- Low‑latency communication with Gemini 3 agents
+### Beyond Storage
 
-### 4) Capture & Understanding (Gemini 3 Intelligence)
-**Perception Agent**
-- OCR from screenshots
-- Audio transcription
-- Visual context understanding
+What makes Mnemos distinct is what happens after capture. While the user continues working, Mnemos proactively:
 
-**Intent Agent**
-- Classifies into 12 life domains
-- Extracts 1–14 action items
-- Identifies deadlines and priorities
+- Researches relevant resources, articles, and documentation on the user's behalf
+- Creates Google Calendar events, Tasks, and reminders automatically
+- Monitors time-sensitive information and notifies users before important moments are missed
+- Drafts email responses for messages requiring replies
 
-### 5) Event Bus (Asynchronous Processing)
-- Decoupled, event‑driven processing
-- Parallel execution by multiple agents
-- Scalable and extensible workflows
+Users can later interact with their memory using **natural language**, retrieving information semantically rather than by keywords.
 
-### 6) Multi‑Agent System (Execution & Orchestration)
-- **Planning Agent** (orchestrator)
-- **Email Assistant Agent**
-- **Research Agent**
-- **Resource Finder Agent**
-- **Proactive Agent** (deadline monitoring)
 
-### 7) Retrieval‑Augmented Generation (RAG)
-- Text embeddings (**text‑embedding‑004**)
-- Semantic vector search for recall and Q&A
 
-### 8) Storage & Persistence
-- **Google Cloud Storage** for files
-- **Firestore** for structured metadata
-- **Vertex AI Search** for semantic indexing
+## High-Level Architecture
 
-### 9) External Tool Integrations
-- Google Calendar, Tasks, Notes, Gmail
-- Automatic event/task creation and email drafting
+Mnemos follows a **modular, event-driven, multi-agent architecture** powered by Gemini 3. The system is composed of distinct layers that handle authentication, user interaction, understanding, orchestration, storage, and integrations.
 
----
+![Mnemos High-Level Architecture](https://raw.githubusercontent.com/SapnaSChavan/gemini-hackathon-2026/2fb7b5b91be85720f0b493527bf229ae48f16de8/architecture/MnemosHighLevelArchitecture.png)
 
-## Physical Architecture (Deployment)
-Mnemos is deployed on Google Cloud Platform with secure, serverless components for scale, reliability, and governance.
+### Frontend and Desktop Layer
 
-![Mnemos Physical Architecture](architecture/MnemosPhysicalArchitecture.png)
+An Electron-based desktop application provides cross-platform support with native OS integrations. Users can instantly capture screenshots, audio, text, or documents through a keyboard shortcut or widget, with minimal workflow interruption.
 
-### Core Components
-- **Compute:** Cloud Run (containerized, autoscaling services)
-- **AI Inference:** Vertex AI (Gemini 3 + Model Armor)
-- **Storage:** Firestore + Cloud Storage
-- **Search:** Vertex AI Search (vector retrieval)
-- **Security:** OAuth + IAM‑based service accounts
-- **Observability:** Cloud Logging, Monitoring, Tracing
+### API Layer
 
----
+FastAPI serves as the central backend gateway, handling REST APIs, WebSocket connections for real-time updates, and routing requests to Gemini 3-powered agents.
 
-## System Flow (End‑to‑End)
-1. User captures a screenshot, audio, text, or document.
-2. Frontend sends payload to FastAPI gateway.
-3. Perception Agent extracts text/transcripts and visual context.
-4. Intent Agent classifies domain, identifies intent, and extracts actions.
-5. Event Bus publishes structured events.
-6. Multi‑agents perform research, drafting, task creation, and reminders.
-7. RAG pipeline indexes data for semantic recall.
-8. User retrieves knowledge or receives proactive notifications.
+### Capture and Understanding Layer
 
----
+Raw user input is converted into structured, meaningful information using Gemini 3's multimodal capabilities   performing OCR on screenshots, transcribing audio, and analyzing visual context.
 
-## Universal Classification Framework
-Mnemos classifies data through a three‑layer model for consistency and scale.
+### Event Bus
 
-### Layer 1: Life Domains (12)
-Work & Career · Education & Learning · Money & Finance · Home & Daily Life · Health & Wellbeing · Family & Relationships · Travel & Movement · Shopping & Consumption · Entertainment & Leisure · Social & Community · Administration & Documents · Ideas & Thoughts
+A centralized event bus enables asynchronous, priority-based processing. Once intent analysis completes, events are published for downstream agents to consume independently, supporting loose coupling and parallel execution.
 
-### Layer 2: Context Types (19)
-Email · Chat Message · Document/PDF · Web Page · Application Screen · Form · Receipt/Invoice · Calendar Item · Social Media Post · Code/Terminal Output · Spreadsheet · Notification · Image · Audio Note · Video · Presentation · Task Item · Research Paper · Miscellaneous Content
+### Multi-Agent System
 
-### Layer 3: Intent Categories (14)
-- **Action‑Oriented:** Act, Schedule, Pay, Buy
-- **Information‑Oriented:** Remember, Learn, Track, Reference
-- **Research‑Oriented:** Research, Compare
-- **Follow‑Up:** Follow Up, Wait
-- **Low Priority:** Archive, Ignore
+Eight specialized Gemini 3-powered agents handle distinct cognitive functions across two processing tiers:
 
----
+**Core Processing Tier**
+
+| Agent | Function |
+| -| -|
+| **Perception Agent** | Performs OCR on screenshots, transcribes audio, and generates semantic descriptions of visual content to extract structured information from raw inputs. |
+| **Classification Agent** | Analyzes content through a three-layer framework (life domain, context type, intent) and extracts 1 to 14 discrete actionable items from a single capture. |
+| **Orchestration Agent** | Executes classified actions through fifteen specialized tools   creating calendar events, generating tasks with due dates, and populating domain-specific collections. |
+| **Research Agent** | Activates selectively when content indicates research value. Searches for solutions, tutorials, and documentation using Gemini 3's Google Search grounding, and synthesizes findings with source citations. |
+| **Proactive Agent** | Monitors captures continuously (2-minute intervals) for time-sensitive information and approaching deadlines, generating graduated notifications based on urgency. Checks scheduling conflicts and surfaces relevant context. |
+| **Resource Finder Agent** | Autonomously determines when learning resources would accelerate user progress, then discovers, evaluates, and curates 3 to 5 high-quality materials with learning path recommendations. |
+| **Email Intelligence Assistant** | Runs as a daily scheduled job analyzing the user's Gmail inbox from the previous 24 hours. Identifies emails requiring responses, generates professional draft replies matched to appropriate tone, and saves them directly to Gmail Drafts for user review. |
+
+Agents communicate through a priority-based event bus with staggered invocation to prevent API rate limiting while maintaining responsiveness.
+
+### Retrieval-Augmented Generation (RAG)
+
+A RAG pipeline using text-embedding-004 converts captured content into vector representations. Vertex AI Search enables scalable semantic retrieval, allowing users to ask natural language questions about previously captured knowledge.
+
+### Storage and Persistence
+
+- **Google Cloud Storage**   Files, screenshots, and documents
+- **Firestore**   Structured metadata, task state, and application configuration
+- **Vertex AI Search**   Indexed semantic retrieval
+
+### External Integrations
+
+Secure OAuth2 integration with Google services enables automatic synchronization with Google Calendar, Tasks, Gmail, and Notes. Actions extracted by Gemini 3 are converted into calendar events, tasks, reminders, or drafted emails without manual effort.
+
+
+
+## Physical Architecture
+
+Mnemos is deployed entirely on Google Cloud Platform using secure, scalable, and service-oriented infrastructure. All components are hosted in the us-central1 region.
+
+![Mnemos Physical Architecture](https://raw.githubusercontent.com/SapnaSChavan/gemini-hackathon-2026/2fb7b5b91be85720f0b493527bf229ae48f16de8/architecture/MnemosPhysicalArchitecture.png)
+
+Key infrastructure decisions include:
+
+- **Compute**: All backend services and agent runtimes run on Google Cloud Run as containerized, stateless workloads with automatic horizontal scaling.
+- **AI Inference**: Gemini 3 is accessed through Vertex AI with Model Armor enforcing safety and compliance controls.
+- **Identity and Access**: Google OAuth for user authentication; dedicated service accounts with least-privilege IAM roles for all backend services. No static secrets or embedded API keys.
+- **Semantic Search**: Text embeddings via text-embedding-004, indexed through Vertex AI Search for low-latency, meaning-based retrieval.
+- **Observability**: Google Cloud Logging, Monitoring, and Tracing for centralized operational visibility across all services.
+
+
+## Three-Layer Universal Classification Framework
+
+Mnemos classifies every capture through three layers to achieve structured, domain-agnostic understanding:
+
+**Layer 1   Life Domains (12 categories):** Work and Career, Education and Learning, Money and Finance, Home and Daily Life, Health and Wellbeing, Family and Relationships, Travel and Movement, Shopping and Consumption, Entertainment and Leisure, Social and Community, Administration and Documents, Ideas and Thoughts.
+
+**Layer 2   Context Types (19 formats):** Email, Chat Message, Document/PDF, Web Page, Application Screen, Form, Receipt/Invoice, Calendar Item, Social Media Post, Code/Terminal Output, Spreadsheet, Notification, Image, Audio Note, Video, Presentation, Task Item, Research Paper, Miscellaneous.
+
+**Layer 3   Intent Categories (14 action types):** Act, Schedule, Pay, Buy, Remember, Learn, Track, Reference, Research, Compare, Follow Up, Wait, Archive, Ignore.
+
 
 ## Tech Stack
-### Backend
-- **Language:** Python
-- **Framework:** FastAPI
-- **Libraries:** pydantic, uvicorn, httpx/requests
-- **AI:** Google Generative AI SDK, Gemini 3 via Vertex AI
-- **Async/Tasks:** asyncio, Celery
 
-### Desktop Frontend
-- **Framework:** Electron.js
-- **UI:** HTML/CSS/JavaScript (React/Vue optional)
-- **IPC:** Electron IPC + REST/WebSockets
+**Backend:** Python, FastAPI, Pydantic, Uvicorn, Celery, asyncio, Google Cloud SDK, Google Gen AI SDK
 
-### Data & Storage
-- **Firestore** (structured metadata)
-- **Google Cloud Storage** (files + media)
-- **Vertex AI Search** (semantic retrieval)
+**Desktop Frontend:** Electron.js, Node.js, HTML5, CSS3, JavaScript, Electron IPC
 
-### DevOps & Monitoring
-- **Containers:** Docker
-- **Deployment:** Cloud Run
-- **Monitoring:** Google Cloud Logging & Monitoring
-- **Testing:** Pytest, Jest/Mocha
+**AI and Intelligence:** Gemini 3 via Vertex AI, text-embedding-004, Vertex AI Search, RAG pipeline
+
+**Database and Storage:** Firestore (NoSQL), Google Cloud Storage
+
+**Deployment:** Docker, Google Cloud Run, Google Secret Manager, IAM
+
+**DevOps:** Google Cloud Logging and Monitoring, Git, GitHub, Pytest, Jest
+
+**Security:** HTTPS/SSL, OAuth2, JWT, role-based access control
+
+
+## Challenges We Ran Into
+
+The biggest challenge was moving from a **reactive chatbot mindset to a proactive system**. Key challenges included:
+
+- **Decision Intelligence**   Determining when Mnemos should act and when it should stay silent required careful reasoning and threshold tuning.
+- **Multi-Action Extraction**   Extracting multiple discrete actions from a single capture, each with independent deadlines and execution requirements.
+- **Multimodal Processing**   Handling unstructured screenshots reliably with high accuracy across diverse application contexts.
+- **Performance Balance**   Balancing low-latency synchronous feedback with deep asynchronous background processing.
+- **Context Preservation**   Maintaining user context across multiple life domains and timeframes without losing relevance.
+
+
+
+## Accomplishments We Are Proud Of
+
+- Built a fully functional **proactive system** with nine specialized AI agents, not just a chatbot.
+- Designed a **multi-agent architecture** with tiered synchronous and asynchronous processing powered by Gemini 3.
+- Enabled instant, **low-friction desktop capture** without interrupting user workflow.
+- Implemented **semantic memory** with RAG-based natural language recall across all captured content.
+- Developed an **Email Intelligence Assistant** that autonomously drafts professional responses from inbox analysis.
+- Built a product **we personally rely on every day**.
+
+
+
+## What We Learned
+
+We learned that **intelligence alone is not enough**. Timing, context, and restraint are equally important.
+
+Gemini 3's multimodal reasoning and long-context capabilities allowed us to move beyond simple retrieval into intelligent planning, contextual memory, and proactive assistance. The journey taught us that the best AI systems are those that **amplify human capability without demanding constant attention**.
+
+
+
+## What Is Next for Mnemos
+
+**Short-term Goals**
+- Cross-device synchronization
+- Deeper integrations with productivity tools (Slack, Notion, Linear)
+- Improved personalized prioritization
+- Native macOS desktop application
+
+**Long-term Vision**
+- Enhanced proactive intelligence with predictive insights
+- Team collaboration features
+- Enterprise-grade security and privacy controls
+- Mobile application for seamless access anywhere
+
+Our ultimate goal is for Mnemos to feel **less like software and more like an extension of human memory**.
 
 ---
 
-## Impact & Results
-Mnemos transforms “save for later” into **actionable outcomes**:
-
-- **Reduces cognitive load** by handling capture + follow‑up automatically
-- **Prevents missed deadlines** through proactive reminders
-- **Improves recall** via semantic search across personal knowledge
-- **Accelerates learning** by surfacing relevant resources instantly
-
----
-
-## Accomplishments We’re Proud Of
-- Built a **Gemini 3‑powered multi‑agent system** for proactive execution.
-- Developed a **desktop-first capture experience** without disrupting workflow.
-- Implemented a **RAG pipeline** for semantic search and intelligent recall.
-- Integrated **Google Calendar, Tasks, and Gmail** with secure authentication.
-- Delivered a **scalable, cloud‑native architecture** on Google Cloud.
-
----
-
-## Roadmap (What’s Next)
-- Expand integrations to more productivity tools.
-- Add cross‑platform support including macOS native app.
-- Introduce smarter prioritization and AI insights.
-- Enable mobile and cross‑device synchronization.
-- Enhance agent reasoning with advanced Gemini models.
-
----
-
-## References
-- Google Cloud SDK: https://docs.cloud.google.com/sdk/docs
-- Host AI agents on Cloud Run: https://cloud.google.com/run/docs/ai-agents
-- Multi‑agent systems on Google Cloud: https://cloud.google.com/architecture/multiagent-ai-system
-- Gemini 3 on Vertex AI: https://docs.cloud.google.com/vertex-ai/generative-ai/docs/start/get-started-with-gemini-3
-- Gemini API Overview: https://ai.google.dev/gemini-api/docs
-- Google Gen AI Python SDK: https://googleapis.github.io/python-genai/
-- Electron: https://www.electronjs.org/docs/latest
+Built for the Gemini Hackathon Google DeepMind
