@@ -22,7 +22,7 @@ That need led us to build **Mnemos**.
 
 Mnemos is a desktop-based AI-powered second brain that captures information the moment it appears and continues working on it in the background.
 
-With a single shortcut (Ctrl + Shift + L) or a widget, users can capture screenshots, voice notes, text snippets, and documents - all without breaking focus.
+With a single shortcut or a widget, users can capture screenshots, voice notes, text snippets, and documents - all without breaking focus.
 
 **Gemini 3** then understands the content, context, and intent behind each capture, classifies it across life domains using a three-layer universal classification framework, and extracts actionable items such as deadlines, follow-ups, or tasks.
 
